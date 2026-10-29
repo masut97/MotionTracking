@@ -65,7 +65,8 @@ def run(output: Path):
 
     def init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
-        assert self.windowTitle() == 'Motion Tracking â€” Version 1.0.0'
+        from .project_identity import NAME, VERSION
+        assert self.windowTitle() == f'{NAME} - Version {VERSION}'
         assert any(label.text() == 'MOTION TRACKING' for label in self.findChildren(QLabel))
         assert not self.windowIcon().isNull()
         from .step_import_self_test import run as test_step_import

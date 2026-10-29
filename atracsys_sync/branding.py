@@ -5,7 +5,7 @@ from .project_identity import NAME, VERSION, ICON
 
 
 def apply(window):
-    window.setWindowTitle(f'{NAME} — Version {VERSION}')
+    window.setWindowTitle(f'{NAME} - Version {VERSION}')
     QApplication.setApplicationDisplayName(NAME)
     icon = QPixmap()
     icon.loadFromData(ICON)
