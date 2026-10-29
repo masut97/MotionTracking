@@ -87,6 +87,9 @@ def install():
                 self._overflow_interval_open = False
                 self._sync_ticks = {}
                 result = start_original(self, *args, **kwargs)
+                from .project_identity import VERSION
+                self._metadata['base_application_version']=self._metadata.get('application_version')
+                self._metadata['application_version']=VERSION
                 camera_adapter = getattr(self._camera_source, '_adapter', None)
                 info = getattr(camera_adapter, 'measurement_info', lambda: {})()
                 fiducial_info.update(info)
@@ -170,7 +173,7 @@ def install():
                 try:
                     report = fiducials.close()
                     if not report['complete']:
-                        self._last_error = 'Fiducial-Export unvollständig; siehe .fiducials.json.'
+                        self._last_error = 'Fiducial-Export unvollstÃ¤ndig; siehe .fiducials.json.'
                 except OSError as error:
                     self._last_error = f'Fiducial-Export konnte nicht finalisiert werden: {error}'
         group = getattr(self, "_script_group", None)
@@ -178,7 +181,7 @@ def install():
             group.stop(tracker_stats=result)
             problems = [s.snapshot() for s in group.sources if s.error or s.rows != group.sample_index]
             if problems:
-                self._last_error = "Messskript-Aufnahme unvollständig. Details in der .scripts.json-Datei."
+                self._last_error = "Messskript-Aufnahme unvollstÃ¤ndig. Details in der .scripts.json-Datei."
             self._script_group = None
             return self.stats()
         return self.stats() if fiducials is not None else result
@@ -196,11 +199,15 @@ def install():
         self.measurement_rate_controller = MeasurementRateController(self)
         from .branding import apply as apply_branding
         apply_branding(self)
+        from .bootstrap import NORMAL_GUI_START
+        if NORMAL_GUI_START:
+            from .version_store import retire_in_background
+            retire_in_background(self.project_root)
 
     def start_window(self, *args, **kwargs):
         free = getattr(self, 'free_analysis_controller', None)
         if free is not None and free.busy():
-            self._set_recording_message('Bitte die freie Zuordnung/Auswertung zuerst abschließen.', 'ready')
+            self._set_recording_message('Bitte die freie Zuordnung/Auswertung zuerst abschlieÃŸen.', 'ready')
             return
         updater = getattr(self, "update_controller", None)
         if updater is not None and updater.busy():
@@ -218,7 +225,7 @@ def install():
         result = window_refresh(self, *args, **kwargs)
         panel = getattr(self, "script_panel", None)
         if panel is not None and panel.pending is not None:
-            self._set_recording_message("Messgeräte werden vorbereitet …", "ready")
+            self._set_recording_message("MessgerÃ¤te werden vorbereitet â€¦", "ready")
         zwick = getattr(self, 'zwick_controller', None)
         if zwick is not None:
             zwick.refresh()
@@ -232,12 +239,12 @@ def install():
     def close_window(self, event):
         free = getattr(self, 'free_analysis_controller', None)
         if free is not None and free.busy():
-            self._set_recording_message('Freie Auswertung läuft. Bitte vor dem Schließen den Abschluss abwarten.', 'ready')
+            self._set_recording_message('Freie Auswertung lÃ¤uft. Bitte vor dem SchlieÃŸen den Abschluss abwarten.', 'ready')
             event.ignore()
             return
         updater = getattr(self, "update_controller", None)
         if updater is not None and updater.busy():
-            updater.status.setText("Update läuft. Bitte vor dem Schließen den Abschluss abwarten.")
+            updater.status.setText("Update lÃ¤uft. Bitte vor dem SchlieÃŸen den Abschluss abwarten.")
             event.ignore()
             return
         try:

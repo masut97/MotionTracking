@@ -65,7 +65,7 @@ def run(output: Path):
 
     def init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
-        assert self.windowTitle() == 'Motion Tracking'
+        assert self.windowTitle() == 'Motion Tracking — Version 1.0.0'
         assert any(label.text() == 'MOTION TRACKING' for label in self.findChildren(QLabel))
         assert not self.windowIcon().isNull()
         self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)

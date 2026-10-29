@@ -2,6 +2,8 @@
 from pathlib import Path
 import sys
 
+NORMAL_GUI_START = False
+
 
 def main():
     from .single_instance import is_auxiliary, run_gui
@@ -9,6 +11,9 @@ def main():
 
 
 def run_application():
+    global NORMAL_GUI_START
+    from .single_instance import is_auxiliary
+    NORMAL_GUI_START = not is_auxiliary(sys.argv)
     if len(sys.argv) == 4 and sys.argv[1] == "--launch-after-exit":
         from .update_ui import launch_after_exit
         return launch_after_exit(int(sys.argv[2]), Path(sys.argv[3]))

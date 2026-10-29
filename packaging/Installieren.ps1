@@ -46,6 +46,9 @@ function Install-Tracker([string]$TargetRoot) {
         }
     }
     $manifest = Get-Content -LiteralPath (Join-Path $packageRoot 'PAKET.json') -Raw | ConvertFrom-Json
+    if ([string]$manifest.version -notmatch '^[0-9a-f]{40}$') { throw 'Ungueltige Paket-Version.' }
+    $versionRoot = Join-Path (Join-Path $TargetRoot 'versions') ([string]$manifest.version).Substring(0,12)
+    $targetApp = Join-Path $versionRoot 'App'
     foreach ($required in $manifest.required_files) {
         $file = Join-Path $packageRoot $required.path
         if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Sha256 $file) -ne $required.sha256) {
@@ -54,7 +57,7 @@ function Install-Tracker([string]$TargetRoot) {
     }
     New-Item -ItemType Directory -Force -Path $TargetRoot | Out-Null
     $copyLog = Join-Path $TargetRoot 'installation-copy.log'
-    $copyArgs = @($packageRoot, $TargetRoot, '/E', '/R:1', '/W:1', '/NFL', '/NDL', '/NP', "/LOG:$copyLog")
+    $copyArgs = @($packageRoot, $versionRoot, '/E', '/R:1', '/W:1', '/NFL', '/NDL', '/NP', "/LOG:$copyLog")
     & "$env:SystemRoot\System32\robocopy.exe" @copyArgs | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "Dateien konnten nicht kopiert werden. Details: $copyLog" }
     $configPath = Join-Path $targetApp 'config.json'

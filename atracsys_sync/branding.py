@@ -1,11 +1,11 @@
 """Independent project identity; legacy technical interfaces stay compatible."""
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QLabel
-from .project_identity import NAME, ICON
+from .project_identity import NAME, VERSION, ICON
 
 
 def apply(window):
-    window.setWindowTitle(NAME)
+    window.setWindowTitle(f'{NAME} — Version {VERSION}')
     QApplication.setApplicationDisplayName(NAME)
     icon = QPixmap()
     icon.loadFromData(ICON)

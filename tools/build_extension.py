@@ -134,6 +134,9 @@ def build(source, target, config=None):
         from atracsys_sync.local_migration import preserve_analysis_settings
         preserve_analysis_settings(source, stage)
         report = _build_payload(source, stage)
+        from atracsys_sync.project_identity import VERSION
+        report['application_version']=VERSION
+        report['project']='MotionTracking'
         from atracsys_sync.project_identity import write_icon
         write_icon(stage)
         shutil.copytree(ROOT / "analysis_scripts", stage / "analysis_scripts", dirs_exist_ok=True,
@@ -156,8 +159,9 @@ def build(source, target, config=None):
         shutil.copytree(geometry_root, stage / "geometries", dirs_exist_ok=True, ignore=ignore)
         cfg["geometry_directory"] = "geometries"
         cfg.pop("update_directory", None)
+        version_store = target.parent.parent if target.parent.parent.name == 'versions' else target.parent / 'versions'
         (stage / "update_settings.json").write_text(json.dumps(
-            {"update_directory": str(target.parent / "versions")}, indent=2), encoding="utf-8")
+            {"update_directory": str(version_store)}, indent=2), encoding="utf-8")
         cfg.update(sdk_root="sdk", native_bridge_path="native/bin/atracsys_bridge.exe", log_directory="logs")
         cfg["analysis_script"] = select_analysis(cfg.get("analysis_script"), stage / "analysis_scripts")
         (stage / "config.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")

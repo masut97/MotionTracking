@@ -60,6 +60,34 @@ def tree_bytes(root):
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
+def test_repeat_update_reuses_verified_version_without_copying_again(tmp_path,monkeypatch):
+    app=runtime(tmp_path);path,digest=archive(tmp_path);parent=tmp_path/'versions'
+    installed=updater.install_update(app,path,parent,digest,REVISION)
+    def fail(*args,**kwargs):pytest.fail('duplicate runtime copy')
+    monkeypatch.setattr(updater,'_copy_runtime',fail)
+    assert updater.install_update(app,path,parent,digest,REVISION)==installed
+    assert list(parent.iterdir())==[installed.parent]
+
+
+def test_existing_update_with_changed_local_settings_is_not_duplicated(tmp_path):
+    app=runtime(tmp_path);path,digest=archive(tmp_path);parent=tmp_path/'versions'
+    installed=updater.install_update(app,path,parent,digest,REVISION)
+    config=json.loads((app/'config.json').read_text());config['recording_frequency_hz']=123
+    (app/'config.json').write_text(json.dumps(config))
+    with pytest.raises(ValueError,match='bereits vorhanden'):
+        updater.install_update(app,path,parent,digest,REVISION)
+    assert list(parent.iterdir())==[installed.parent]
+
+
+def test_existing_update_with_corrupted_runtime_is_not_reused(tmp_path):
+    app=runtime(tmp_path);path,digest=archive(tmp_path);parent=tmp_path/'versions'
+    installed=updater.install_update(app,path,parent,digest,REVISION)
+    (installed/'sdk/local.dll').write_bytes(b'corrupt')
+    with pytest.raises(ValueError,match='Vorhandene Version'):
+        updater.install_update(app,path,parent,digest,REVISION)
+    assert list(parent.iterdir())==[installed.parent]
+
+
 def test_update_preserves_local_calibration_settings_and_old_installation(tmp_path):
     app = runtime(tmp_path)
     before = tree_bytes(app)

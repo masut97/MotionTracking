@@ -181,8 +181,16 @@ def install_update(current_app, archive, target_parent, expected_sha256, revisio
     if parent == current_app or parent.is_relative_to(current_app):
         raise ValueError("Update destination must be outside the running App")
     target = parent / revision[:12]
-    if target.exists() or target == current_app or current_app.is_relative_to(target):
+    if target == current_app or current_app.is_relative_to(target):
         raise FileExistsError("A fresh independent version directory is required")
+    if target.exists():
+        from .version_store import check_prepared
+        check_prepared(target/'App',current_app,revision,expected_sha256,payload)
+        if verify_callback is not None:
+            result=verify_callback(target/'App')
+            if result is False or isinstance(result,dict) and result.get('passed') is False:
+                raise RuntimeError('Existing version verification failed')
+        return target/'App'
     base = current_app / "AtracsysLiveTracker.exe"
     base_hash = _sha256(base)
     if base_hash not in manifest["compatible_base_sha256"]:
@@ -239,7 +247,9 @@ def install_update(current_app, archive, target_parent, expected_sha256, revisio
         (app / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
         (app / "update_settings.json").write_text(json.dumps(update_settings, indent=2), encoding="utf-8")
         (app / "logs").mkdir(exist_ok=True)
+        from .version_store import local_state
         report = {"revision": revision, "archive_sha256": expected_sha256,
+                  "origin_state":local_state(current_app), "prepared_state":local_state(app),
                   "previous_app": str(current_app), "base_sha256": base_hash,
                   "source_files": {name: hashlib.sha256(data).hexdigest() for name, data in payload.items()}}
         (app / "sync_extension" / "update.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -254,5 +264,9 @@ def install_update(current_app, archive, target_parent, expected_sha256, revisio
             result = verify_callback(app)
             if result is False or isinstance(result, dict) and result.get("passed") is False:
                 raise RuntimeError("Updated runtime verification failed")
+        report['prepared_state']=local_state(app)
+        (app/'sync_extension/update.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+        build['files']['sync_extension/update.json']=_sha256(app/'sync_extension/update.json')
+        build_path.write_text(json.dumps(build,indent=2),encoding='utf-8')
         stage.rename(target)
     return target / "App"

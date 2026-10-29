@@ -1,5 +1,14 @@
 # Motion Tracking
 
+Version **1.0.0**. Installationen liegen künftig unter einem gemeinsamen
+`MotionTracking_App/versions/<Versionskennung>/App`. Updates erzeugen keine
+zusätzlichen Ordner mit Datum/Uhrzeit. Eine bereits vorbereitete Version wird
+nach Integritäts- und Einstellungsprüfung wiederverwendet; bei Abweichungen
+wird keine zweite Kopie angelegt. Nach dem erfolgreichen Wechsel werden
+inaktive verwaltete Programmversionen entfernt. Messdaten, Kalibrierungen und
+Begleitdateien werden vorher bytegenau geprüft in `PreservedData` erhalten.
+Laufende Versionen und aktiv referenzierte Datenpfade werden nicht entfernt.
+
 Independent project for use with Atracsys tracking hardware. Not affiliated with, endorsed by, or supported by Atracsys. Manufacturer names identify supported hardware only. Rights and licence requirements for third-party software remain separate.
 
 Eigene Erweiterung fÃ¼r fusionTrack500, externe Messskripte (ESP32/NAU7802),
@@ -101,8 +110,7 @@ Der Button lÃ¤dt ausschlieÃŸlich nach bestandenen GitHub-Tests verÃ¶ffentl
 Code-Pakete. Die neue Version wird getrennt installiert und mit zwei simulierten
 Aufnahmen geprÃ¼ft. Erst danach wird die Desktop-VerknÃ¼pfung aktualisiert;
 anschlieÃŸend kann neu gestartet werden. WÃ¤hrend Aufnahme, Vorbereitung oder
-GerÃ¤teprÃ¼fung sind Updates gesperrt. Vorherige Version und Rohdaten bleiben
-erhalten. Messpfad, GerÃ¤teeinstellungen und Geometrien/Kalibrierungen werden vom
+GerÃ¤teprÃ¼fung sind Updates gesperrt. Die vorherige Programmversion bleibt bis zum erfolgreichen Wechsel erhalten; danach werden ihre Programmdateien bereinigt. Rohdaten bleiben erhalten. Messpfad, GerÃ¤teeinstellungen und Geometrien/Kalibrierungen werden vom
 jeweiligen PC Ã¼bernommen; diese Dateien werden nicht aus GitHub ersetzt.
 
 Die automatische VerÃ¶ffentlichung liegt in `.github/workflows/tests.yml`.

@@ -68,7 +68,6 @@ class UpdateWorker(QThread):
                 self.finished_update.emit(None)
                 return
             destination = Path(load_update_settings(self.app)["update_directory"])
-            destination = destination / time.strftime("%Y%m%d-%H%M%S")
             with tempfile.TemporaryDirectory(prefix="atracsys-download-") as directory:
                 self.progress.emit("Geprüftes Code-Paket wird heruntergeladen …")
                 archive, checksum = download_release(self.app, release, directory)
