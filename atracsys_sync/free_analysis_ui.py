@@ -99,8 +99,8 @@ class ProfileDialog(QDialog):
             # reference. Missing identities are displayed disabled, never rebound.
             for marker, label in names.items():
                 if marker not in previous_names and not any(
-                        ':' not in marker and key.split(':')[0] == marker for key in previous_names):
-                    self.add_marker(marker, str(marker).split(':')[0])
+                        key.split(':')[0] == marker.split(':')[0] for key in previous_names):
+                    self.add_marker(marker, label if ':' in marker else marker)
         finally:
             self.markers.blockSignals(False)
         self.refresh_choices()
@@ -310,11 +310,12 @@ class ProfileDialog(QDialog):
             names = profile['markers']
             if self.visible_choices is not None:
                 names = dict(names)
+                configured_geometries = {key.split(':')[0] for key in names}
                 raw = self.visible_choices()
                 self.choice_snapshot = selection_choices(raw)
                 for key, label in selection_choices(raw, preferred=True).items():
-                    if not any(existing.split(':')[0] == key.split(':')[0] for existing in names):
-                        names.setdefault(key, key.split(':')[0])
+                    if key.split(':')[0] not in configured_geometries:
+                        names.setdefault(key, label if ':' in key else key)
             for marker, label in names.items():
                 self.add_marker(marker, label)
         finally:
