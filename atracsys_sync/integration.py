@@ -88,8 +88,8 @@ def install():
                 self._sync_ticks = {}
                 result = start_original(self, *args, **kwargs)
                 from .project_identity import VERSION
-                self._metadata['base_application_version']=self._metadata.get('application_version')
-                self._metadata['application_version']=VERSION
+                self._metadata['base_application_version']=getattr(recording,'__version__',None)
+                self._metadata['motion_tracking_version']=VERSION
                 camera_adapter = getattr(self._camera_source, '_adapter', None)
                 info = getattr(camera_adapter, 'measurement_info', lambda: {})()
                 fiducial_info.update(info)
