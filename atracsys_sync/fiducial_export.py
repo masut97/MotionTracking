@@ -73,7 +73,8 @@ def observation_rows(frame, definitions):
             expected.append((marker.geometry_id, marker.tracking_id, index + 1,
                              rotation @ point + position, present))
     observations = tuple(frame.fiducials)
-    valid = [str(f.status) == 'OK' and np.isfinite(f.position_mm).all() for f in observations]
+    valid = [str(f.status).strip().casefold() in {'ok', '0', '0x00000000'}
+             and np.isfinite(f.position_mm).all() for f in observations]
     distances = np.full((len(observations), len(expected)), np.inf)
     if observations and expected:
         measured = np.asarray([f.position_mm for f in observations])

@@ -27,6 +27,12 @@ def frame(fids=(), markers=(), counter=1, stamp=123456789):
 DEFS = {351: np.array([[0., 0., 0.], [20., 0., 0.]])}
 
 
+@pytest.mark.parametrize('status', ['OK', 'Ok', '0', '0x00000000'])
+def test_success_status_from_native_mock_and_sdk_adapters(status):
+    rows = observation_rows(frame([fid(1, (10,20,1000), status)], [marker()]), DEFS)
+    assert rows[0]['visible'] == 1 and rows[0]['geometry_fiducial_number'] == 1
+
+
 def test_export_uses_measured_values_not_rigid_predicted_positions():
     measured = (10.2, 20.1, 1000.03)
     rows = observation_rows(frame([fid(13, measured)], [marker()]), DEFS)

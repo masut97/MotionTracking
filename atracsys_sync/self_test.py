@@ -39,6 +39,17 @@ def run(output: Path):
     config_path = output / "test_config.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
     original_init = MainWindow.__init__
+    from atracsys_tracker.adapters.mock import MockAdapter
+    original_mock_read = MockAdapter.read_frame
+    expected_fiducials = {}
+
+    def capture_mock_fiducials(self, *args, **kwargs):
+        frame = original_mock_read(self, *args, **kwargs)
+        for fiducial in frame.fiducials:
+            expected_fiducials[(frame.frame_counter, frame.device_timestamp_us, fiducial.index)] = tuple(fiducial.position_mm)
+        return frame
+
+    MockAdapter.read_frame = capture_mock_fiducials
     windows = []
     errors = []
     recording_name = "gui_test_" + str(time.time_ns())
@@ -379,6 +390,12 @@ def run(output: Path):
             fiducial_info = json.loads((output/(recording_name+suffix+'.fiducials.json')).read_text())
             assert fiducial_info['complete'] and fiducial_info['frames'] > 0, fiducial_info
             assert fiducial_info['sdk_correspondence_exported'] is False
+            fiducial_rows = list(csv.DictReader((output/(recording_name+suffix+'.fiducials.csv')).open(encoding='utf-8-sig')))
+            measured_fiducials = [row for row in fiducial_rows if row['frame_fiducial_index'] and row['visible']=='1']
+            assert measured_fiducials, 'No measured fiducial positions exported'
+            for row in measured_fiducials:
+                key = tuple(int(row[k]) for k in ('frame_counter', 'device_timestamp_us', 'frame_fiducial_index'))
+                assert tuple(float(row[k]) for k in ('x_mm','y_mm','z_mm')) == expected_fiducials[key]
             assert metadata['fiducial_export']['source'] == 'received_stereo_image_frames'
             context = metadata['coordinate_context']
             assert 'error' not in context, context
@@ -470,6 +487,7 @@ def run(output: Path):
         report = {"passed": True, "frames": tracker_metadata["frame_count"], "marker_rows": len(tracker_rows),
                   "script_count": len(manifest["scripts"]), "frequency_hz": 20,
                   "exact_reference_timestamps": True, "hardware_synchronized": False,
+                  "measured_fiducial_positions_and_immediate_finalization": True,
                   "recording_cycles": len(completed_cycles), "json_final_immediately_after_stop": True,
                   "marker_footer_visible_in_all_tabs": True,
                   "curated_analysis_selection_and_profile_toggle": True,
@@ -491,6 +509,7 @@ def run(output: Path):
         return 1
     finally:
         MainWindow.__init__ = original_init
+        MockAdapter.read_frame = original_mock_read
         root_config_path.write_bytes(original_root_config)
         if original_settings is None:
             settings_path.unlink(missing_ok=True)
