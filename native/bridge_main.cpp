@@ -14,6 +14,8 @@
 
 #include "shared_protocol.hpp"
 #include "frame_policy.hpp"
+#include "measurement_memory.hpp"
+#include "parent_watch.hpp"
 
 namespace {
 
@@ -286,7 +288,7 @@ void publish_frame(SharedMemory& shared, const ftkFrameQuery* frame, std::int64_
     shared.header()->heartbeat_ns = monotonic_ns();
 }
 
-void publish_pose(SharedMemory& shared, const ftkFrameQuery* frame) {
+const PoseSlot* publish_pose(SharedMemory& shared, const ftkFrameQuery* frame) {
     const auto* header = frame->imageHeader;
     const auto markers = collect_markers(frame);
     const std::int64_t pose_sequence = shared.header()->pose_write_sequence + 1;
@@ -301,15 +303,75 @@ void publish_pose(SharedMemory& shared, const ftkFrameQuery* frame) {
     InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&pose->sequence), pose_sequence);
     InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&shared.header()->pose_write_sequence), pose_sequence);
     shared.header()->heartbeat_ns = monotonic_ns();
+    return pose;
 }
 
-int run_bridge(const Arguments& args, SharedMemory& shared, HANDLE stop_event, Log& log) {
+void publish_measurement(MeasurementMemory& memory, const ftkFrameQuery* frame, const PoseSlot& pose) {
+    const auto sequence = memory.header()->write_sequence + 1;
+    auto* slot = memory.begin(sequence);
+    slot->frame_counter = pose.frame_counter;
+    slot->device_timestamp_us = pose.device_timestamp_us;
+    slot->computer_monotonic_ns = pose.computer_monotonic_ns;
+    slot->marker_count = pose.marker_count;
+    std::copy(pose.markers, pose.markers + pose.marker_count, slot->markers);
+    slot->flags = 0;
+    slot->fiducial_count = frame->threeDFiducialsStat == ftkQueryStatus::QS_OK
+        ? (std::min)(frame->threeDFiducialsCount, static_cast<std::uint32_t>(kMaxFiducials)) : 0;
+    if (frame->threeDFiducialsStat != ftkQueryStatus::QS_OK) slot->flags |= kMissingFiducials;
+    if (frame->threeDFiducialsCount > kMaxFiducials ||
+        frame->markersCount + frame->sixtyFourFiducialsMarkersCount > kMaxMarkers)
+        slot->flags |= kMeasurementTruncated;
+    for (std::uint32_t i = 0; i < slot->fiducial_count; ++i) {
+        auto& f = slot->fiducials[i];
+        f = {};
+        f.geometry_id = -1;
+        f.geometry_index = -1;
+        const auto& source = frame->threeDFiducials[i];
+        auto& o = f.observation;
+        o.index = i;
+        o.status = static_cast<std::uint32_t>(source.status);
+        o.x_mm = source.positionMM.x; o.y_mm = source.positionMM.y; o.z_mm = source.positionMM.z;
+        o.left_index = o.right_index = -1;
+        if (frame->rawDataLeftStat == ftkQueryStatus::QS_OK && source.leftIndex < frame->rawDataLeftCount) {
+            o.left_index = static_cast<std::int32_t>(source.leftIndex);
+            o.left_x = frame->rawDataLeft[source.leftIndex].centerXPixels;
+            o.left_y = frame->rawDataLeft[source.leftIndex].centerYPixels;
+        }
+        if (frame->rawDataRightStat == ftkQueryStatus::QS_OK && source.rightIndex < frame->rawDataRightCount) {
+            o.right_index = static_cast<std::int32_t>(source.rightIndex);
+            o.right_x = frame->rawDataRight[source.rightIndex].centerXPixels;
+            o.right_y = frame->rawDataRight[source.rightIndex].centerYPixels;
+        }
+        o.epipolar_error = source.epipolarErrorPixels;
+        o.triangulation_error = source.triangulationErrorMM;
+        o.probability = source.probability;
+    }
+    auto associate = [&](auto& marker, std::size_t count) {
+        for (std::size_t i = 0; i < count; ++i) {
+            if (!(marker.geometryPresenceMask & (std::uint64_t{1} << i))) continue;
+            const auto index = marker.fiducialCorresp[i];
+            if (index < slot->fiducial_count)
+                assign_fiducial(slot->fiducials[index], marker.geometryId, marker.id, static_cast<std::uint32_t>(i));
+            else
+                slot->flags |= kInvalidCorrespondence;
+        }
+    };
+    if (frame->markersStat == ftkQueryStatus::QS_OK)
+        for (std::uint32_t i = 0; i < frame->markersCount; ++i) associate(frame->markers[i], FTK_MAX_FIDUCIALS);
+    if (frame->sixtyFourFiducialsMarkersStat == ftkQueryStatus::QS_OK)
+        for (std::uint32_t i = 0; i < frame->sixtyFourFiducialsMarkersCount; ++i)
+            associate(frame->sixtyFourFiducialsMarkers[i], FTK_MAX_FIDUCIALS_64);
+    memory.commit(slot, sequence);
+}
+
+int run_bridge(const Arguments& args, SharedMemory& shared, MeasurementMemory& measurements, HANDLE stop_event, Log& log) {
     const auto sdk_bin = std::filesystem::path(args.sdk_root) / L"bin";
     SetDllDirectoryW(sdk_bin.c_str());
     std::int64_t image_sequence = 0;
     while (WaitForSingleObject(stop_event, 0) != WAIT_OBJECT_0) {
         shared.header()->reserved0 = 0;
         shared.header()->state = static_cast<std::uint32_t>(BridgeState::Reconnecting);
+        measurements.header()->state = 3;
         ftkBuffer init_errors{};
         ftkLibrary library = ftkInitExt(nullptr, &init_errors);
         if (!library) {
@@ -345,16 +407,22 @@ int run_bridge(const Arguments& args, SharedMemory& shared, HANDLE stop_event, L
         if (!geometry_ok) copy_text(shared.header()->last_error, sizeof(shared.header()->last_error),
                                     "Mindestens eine Geometrie konnte nicht registriert werden");
 
-        ftkFrameQuery* frame = ftkCreateFrame();
-        if (!frame || ftkSetFrameOptions(true, 0, 256, 256, 256, 128, frame) != ftkError::FTK_OK) {
+        ftkFrameQuery* image_frame = ftkCreateFrame();
+        ftkFrameQuery* measurement_frame = ftkCreateFrame();
+        if (!image_frame || !measurement_frame ||
+            ftkSetFrameOptions(true, 0, 256, 256, 256, 128, image_frame) != ftkError::FTK_OK ||
+            ftkSetFrameOptions(false, 0, 256, 256, 256, 128, measurement_frame) != ftkError::FTK_OK) {
             copy_text(shared.header()->last_error, sizeof(shared.header()->last_error), "SDK-Framepuffer konnte nicht angelegt werden");
-            if (frame) ftkDeleteFrame(frame);
+            if (image_frame) ftkDeleteFrame(image_frame);
+            if (measurement_frame) ftkDeleteFrame(measurement_frame);
             ftkClose(&library);
             std::this_thread::sleep_for(std::chrono::milliseconds(750));
             continue;
         }
 
         shared.header()->state = static_cast<std::uint32_t>(BridgeState::Running);
+        ++measurements.header()->connection_epoch;
+        measurements.header()->state = 2;
         if (geometry_ok) shared.header()->last_error[0] = '\0';
         log.write("Bridge verbunden");
         int consecutive_errors = 0;
@@ -365,10 +433,12 @@ int run_bridge(const Arguments& args, SharedMemory& shared, HANDLE stop_event, L
         bool have_pose_counter = false;
         std::uint32_t last_pose_counter = 0;
         const auto image_interval = std::chrono::nanoseconds(1'000'000'000 / args.image_fps);
-        const auto pose_interval = std::chrono::nanoseconds(1'000'000'000 / args.pose_fps);
+        const auto pose_interval = static_cast<std::uint64_t>(1'000'000'000 / args.pose_fps);
         auto next_image = Clock::now();
-        auto next_pose = next_image;
+        std::uint64_t next_pose = 0;
         while (WaitForSingleObject(stop_event, 0) != WAIT_OBJECT_0) {
+            const bool image_query = Clock::now() >= next_image;
+            auto* frame = image_query ? image_frame : measurement_frame;
             if (first_call) log.write("Warte auf ersten ftkGetLastFrame-Aufruf");
             const ftkError status = ftkGetLastFrame(library, device.serial, frame, 250);
             if (first_call) {
@@ -388,14 +458,15 @@ int run_bridge(const Arguments& args, SharedMemory& shared, HANDLE stop_event, L
                 no_frame_count = 0;
                 const auto counter = frame->imageHeader->counter;
                 auto now = Clock::now();
-                if (now >= next_pose && (!have_pose_counter || counter != last_pose_counter)) {
-                    publish_pose(shared, frame);
-                    while (next_pose <= now) next_pose += pose_interval;
+                const auto now_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
+                if ((!have_pose_counter || counter != last_pose_counter) && sample_due(now_ns, next_pose, pose_interval)) {
+                    const auto* pose = publish_pose(shared, frame);
+                    publish_measurement(measurements, frame, *pose);
                 }
                 last_pose_counter = counter;
                 have_pose_counter = true;
                 now = Clock::now();
-                if (now >= next_image) {
+                if (image_query && now >= next_image) {
                     if (image_sequence == 0) log.write("Publiziere ersten Shared-Memory-Bildframe");
                     publish_frame(shared, frame, ++image_sequence);
                     if (image_sequence == 1) log.write("Erster Shared-Memory-Bildframe publiziert");
@@ -445,10 +516,12 @@ int run_bridge(const Arguments& args, SharedMemory& shared, HANDLE stop_event, L
                 break;
             }
         }
-        ftkDeleteFrame(frame);
+        ftkDeleteFrame(image_frame);
+        ftkDeleteFrame(measurement_frame);
         ftkClose(&library);
     }
     shared.header()->state = static_cast<std::uint32_t>(BridgeState::Stopping);
+    measurements.header()->state = 5;
     return 0;
 }
 
@@ -458,11 +531,13 @@ int wmain(int argc, wchar_t** argv) {
     try {
         const auto args = parse_args(argc, argv);
         Log log(args.log_path);
+        watch_parent(parent_process_id());
         SharedMemory shared(args.mapping_name);
+        MeasurementMemory measurements(args.mapping_name + L"_measurements_v1");
         const std::wstring stop_name = args.mapping_name + L"_stop";
         HANDLE stop_event = CreateEventW(nullptr, TRUE, FALSE, stop_name.c_str());
         if (!stop_event) throw std::runtime_error("Stop-Event konnte nicht angelegt werden");
-        const int result = run_bridge(args, shared, stop_event, log);
+        const int result = run_bridge(args, shared, measurements, stop_event, log);
         CloseHandle(stop_event);
         return result;
     } catch (const std::exception&) {

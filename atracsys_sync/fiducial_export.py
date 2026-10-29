@@ -23,6 +23,38 @@ COLUMNS = ('session_id', 'frame_counter', 'device_timestamp_us', 'computer_monot
 MATCH_LIMIT_MM = 1.0
 
 
+def sdk_observation_rows(frame, definitions):
+    """Use the SDK correspondence table from this exact measurement frame."""
+    assignments = frame.native_owner.sdk_correspondences
+    markers = {(m.geometry_id, m.tracking_id): m for m in frame.markers}
+    used, rows = set(), []
+    for f in frame.fiducials:
+        valid = str(f.status).strip().casefold() in {'ok','0','0x00000000'} and np.isfinite(f.position_mm).all()
+        row = dict(frame_fiducial_index=f.index, visible=int(valid), status=f.status,
+                   left_index=f.left_index, right_index=f.right_index, epipolar_error_px=f.epipolar_error_px,
+                   triangulation_error_mm=f.triangulation_error_mm, probability=f.probability)
+        if valid:
+            row.update(zip(('x_mm','y_mm','z_mm'), f.position_mm))
+        geometry, tracking, index, count = assignments.get(f.index, (-1,0,-1,0))
+        marker = markers.get((geometry, tracking))
+        if (valid and count == 1 and marker is not None and 0 <= index < 64
+                and marker.presence_mask & (1 << index)):
+            row.update(geometry_id=geometry, tracking_id=tracking, geometry_fiducial_number=index+1,
+                       assignment_status='sdk_correspondence')
+            used.add((geometry, tracking, index+1))
+        else:
+            row['assignment_status'] = ('invalid_observation' if not valid else
+                                        'ambiguous_sdk_correspondence' if count > 1 else 'unassigned')
+        rows.append(row)
+    for (geometry, tracking), marker in markers.items():
+        for index in range(len(definitions.get(geometry, ()))):
+            if (geometry, tracking, index+1) not in used:
+                rows.append(dict(geometry_id=geometry, tracking_id=tracking, geometry_fiducial_number=index+1,
+                    visible=0, assignment_status='not_uniquely_assigned' if marker.presence_mask & (1 << index)
+                    else 'not_in_marker_presence_mask'))
+    return rows or [dict(visible=0, assignment_status='no_triangulated_fiducials')]
+
+
 def load_geometries(root, names):
     """Read exact local definitions before starting either recording clock."""
     root = Path(root)
@@ -59,6 +91,8 @@ def observation_rows(frame, definitions):
     correspondence table. Every candidate within the limit counts as ambiguity;
     a nearest-neighbour choice is never forced. Presence masks are respected.
     """
+    if hasattr(getattr(frame, 'native_owner', None), 'sdk_correspondences'):
+        return sdk_observation_rows(frame, definitions)
     expected = []
     for marker in frame.markers:
         points = definitions.get(marker.geometry_id)
@@ -128,7 +162,9 @@ class FiducialSession:
                          timestamp_policy='Original image-frame device timestamp, counter and host timestamp.',
                          csv=str(self.path), frames=0, rows=0, queue_drops=0, error='',
                          assigned_observations=0, unassigned_observations=0,
-                         invalid_observations=0, finalized=False, complete=False)
+                         invalid_observations=0, measurement_ring_drops=0,
+                         incomplete_sdk_frames=0, finalized=False, complete=False)
+        self.info.update(info)
         self.queue = queue.Queue(capacity)
         self.lock = threading.Lock()
         self.closed = False
@@ -147,7 +183,9 @@ class FiducialSession:
 
     def offer(self, frame):
         # Pose-ring frames carry no raw observations. Do not synthesize them.
-        if not frame.width or frame.computer_monotonic_s < self.started:
+        joint = getattr(frame, 'pixel_format', '') == 'MEASUREMENT_V1'
+        if ((not frame.width and not joint) or frame.computer_monotonic_s < self.started
+                or self.info['source'] == 'joint_measurement_ring_v1' and not joint):
             return
         with self.lock:
             identity = (frame.frame_counter, frame.device_timestamp_us)
@@ -160,6 +198,11 @@ class FiducialSession:
             snapshot.frame_counter, snapshot.device_timestamp_us = identity
             snapshot.computer_monotonic_s = frame.computer_monotonic_s
             snapshot.markers, snapshot.fiducials = tuple(frame.markers), tuple(frame.fiducials)
+            snapshot.native_owner = getattr(frame, 'native_owner', None)
+            if joint:
+                self.info['measurement_ring_drops'] = max(self.info['measurement_ring_drops'],
+                    max(0, snapshot.native_owner.ring_drops-self.info.get('ring_drops_at_start', 0)))
+                self.info['incomplete_sdk_frames'] += int(bool(snapshot.native_owner.measurement_flags))
             try:
                 self.queue.put_nowait(snapshot)
             except queue.Full:
@@ -182,7 +225,7 @@ class FiducialSession:
                         self.writer.writerow(dict(common, **row))
                         self.info['rows'] += 1
                         if 'frame_fiducial_index' in row:
-                            key = ('assigned_observations' if row['assignment_status'] == 'unique_geometric_match'
+                            key = ('assigned_observations' if row['assignment_status'] in {'unique_geometric_match','sdk_correspondence'}
                                    else 'unassigned_observations' if row['visible'] else 'invalid_observations')
                             self.info[key] += 1
                     self.info['frames'] += 1
@@ -209,7 +252,8 @@ class FiducialSession:
             self.info['error'] = 'Fiducial writer did not finish before stop timeout.'
         self.info['finalized'] = not self.info['error'] and not self.thread.is_alive()
         self.info['complete'] = (self.info['finalized'] and self.info['frames'] > 0
-                                 and not self.info['queue_drops'])
+                                 and not self.info['queue_drops'] and not self.info['measurement_ring_drops']
+                                 and not self.info['incomplete_sdk_frames'])
         json.dump(self.info, self.meta_stream, indent=2)
         self.meta_stream.flush()
         os.fsync(self.meta_stream.fileno())
@@ -220,9 +264,61 @@ class FiducialSession:
 class ObservedAdapter:
     def __init__(self, adapter, worker):
         self.adapter, self.worker = adapter, worker
+        self.fast = None
 
     def __getattr__(self, name):
         return getattr(self.adapter, name)
+
+    def connect(self, *args, **kwargs):
+        self._close_fast()
+        result = self.adapter.connect(*args, **kwargs)
+        name = getattr(self.adapter, '_mapping_name', None)
+        process = getattr(self.adapter, '_process', None)
+        if name and process is not None:
+            from .measurement_channel import ExistingMapping, Reader, SUFFIX
+            mapping = None
+            try:
+                mapping = ExistingMapping(name+SUFFIX)
+                self.fast = Reader(mapping, process.pid)
+            except (OSError, ValueError):
+                if mapping is not None:
+                    mapping.close()
+        return result
+
+    def _close_fast(self):
+        if self.fast is not None:
+            self.fast.close()
+            self.fast = None
+
+    def disconnect(self):
+        self._close_fast()
+        return self.adapter.disconnect()
+
+    def drain_recording_frames(self):
+        if self.fast is None:
+            drain = getattr(self.adapter, 'drain_recording_frames', None)
+            return drain() if drain is not None else ()
+        from .measurement_channel import packet
+        return tuple(packet(slot, self.adapter._marker, self.fast.dropped) for slot in self.fast.drain())
+
+    def discard_recording_frames(self):
+        if self.fast is not None:
+            self.fast.discard()
+        discard = getattr(self.adapter, 'discard_recording_frames', None)
+        if discard is not None:
+            discard()
+
+    @property
+    def has_separate_pose_stream(self):
+        return self.fast is not None or getattr(self.adapter, 'has_separate_pose_stream', False)
+
+    def measurement_info(self):
+        if self.fast is None:
+            return {}
+        return dict(source='joint_measurement_ring_v1', sdk_correspondence_exported=True,
+            assignment_method='sdk_fiducial_corresp', ring_drops_at_start=self.fast.dropped,
+            sampling='Exact accepted pose-recording frames; no image-rate limit or interpolation.',
+            timestamp_policy='Identical original device/host timestamps and frame counters as the pose frame.')
 
     def read_frame(self, *args, **kwargs):
         frame = self.adapter.read_frame(*args, **kwargs)

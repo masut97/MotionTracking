@@ -87,16 +87,20 @@ def install():
                 self._overflow_interval_open = False
                 self._sync_ticks = {}
                 result = start_original(self, *args, **kwargs)
+                camera_adapter = getattr(self._camera_source, '_adapter', None)
+                info = getattr(camera_adapter, 'measurement_info', lambda: {})()
+                fiducial_info.update(info)
                 self._fiducial_session = FiducialSession(
                     self._csv_path, self._session_id, self._started_monotonic,
                     fiducial_definitions, fiducial_info)
                 self._metadata['fiducial_export'] = {
                     'csv': str(self._fiducial_session.path),
                     'manifest': str(self._fiducial_session.manifest),
-                    'source': 'received_stereo_image_frames',
-                    'sampling': 'Independent image rate, not high-rate pose samples',
+                    'source': fiducial_info.get('source', 'received_stereo_image_frames'),
+                    'sampling': fiducial_info.get('sampling', 'Independent image rate, not high-rate pose samples'),
                     'coordinates': 'Measured camera coordinates in mm; no synthesized positions',
-                    'point_numbering': 'Unique geometric matching, not original SDK correspondences'}
+                    'point_numbering': ('Original SDK correspondences' if info else
+                                        'Unique geometric matching, not original SDK correspondences')}
                 if group is not None:
                     self._script_started_counter = time.perf_counter()
                     group.begin_recording(self._csv_path, self._session_id, self._script_started_counter)
@@ -132,6 +136,13 @@ def install():
             return accepted
 
     def write_frame(self, writer, frame):
+        fiducials = getattr(self, '_fiducial_session', None)
+        if fiducials is not None and getattr(frame, 'pixel_format', '') == 'MEASUREMENT_V1':
+            fiducials.offer(frame)
+            if fiducials.info['measurement_ring_drops']:
+                self._metadata['camera_data_incomplete'] = True
+            if fiducials.info['incomplete_sdk_frames']:
+                self._metadata['fiducial_data_incomplete'] = True
         with self._lock:
             group = getattr(self, "_script_group", None)
             tick = getattr(self, "_sync_ticks", {}).pop((frame.frame_counter, frame.computer_monotonic_s), None)
@@ -150,10 +161,10 @@ def install():
 
     def stop(self, *args, **kwargs):
         fiducials = getattr(self, '_fiducial_session', None)
-        self._fiducial_session = None
         try:
             result = stop_original(self, *args, **kwargs)
         finally:
+            self._fiducial_session = None
             if fiducials is not None:
                 try:
                     report = fiducials.close()
@@ -180,6 +191,8 @@ def install():
         self.script_panel = ScriptPanel(self, window_start)
         self.centralWidget().layout().insertWidget(3, self.script_panel)
         organize_window(self, self.script_panel)
+        from .measurement_ui import MeasurementRateController
+        self.measurement_rate_controller = MeasurementRateController(self)
         self.setWindowTitle(self.windowTitle() + " · Messskripte")
 
     def start_window(self, *args, **kwargs):

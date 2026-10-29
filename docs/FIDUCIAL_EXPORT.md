@@ -1,5 +1,41 @@
 # Measured fiducial export
 
+## Joint measurement channel (new native bridge)
+
+The matching native bridge supplies a separate `ATRMEAS1` measurement ring,
+independent of the legacy image channel. Each committed sample contains marker
+poses, measured triangulated fiducials, original SDK correspondences, frame
+counter and the same device/host timestamps as the pose sample. The legacy v2
+layout remains unchanged. Read-only consumers reject incompatible layouts,
+changed producer identities, torn slots and SDK reconnections. Ring overwrites
+and incomplete/truncated SDK samples are reported explicitly.
+
+Pixel retrieval is requested on a separate preallocated SDK query only for the
+preview cadence, normally 20 Hz. The measurement query does not request pixels.
+Both queries run on ONE SDK connection; a second camera client is never opened.
+335 Hz is a target/native publication limit, not a guarantee of actual device,
+SDK processing or disk throughput. Original timestamps and missing observations
+remain unchanged. The application displays the measurement publication rate
+separately from the actual stored recording rate and preview rate.
+
+With this channel, fiducials are exported for exactly the accepted recording
+frames, after the recorder's single existing frequency selection. Set recording
+frequency to 335 Hz to request a 335 Hz recording, or select a lower rate for
+both poses and fiducials. An SDK correspondence supplies the geometry ID,
+tracking ID and 1-based sphere number; no nearest-predicted-point matching is
+used on this path. Multiple conflicting SDK assignments remain unassigned.
+The summary has `source=joint_measurement_ring_v1` and
+`sdk_correspondence_exported=true`. Selected pose/fiducial frame counters and
+device timestamps match exactly. No extra sensor hardware synchronisation is
+asserted. CSV row counts differ when frames contain missing or unassigned points.
+
+The fast channel requires the matching separately built native executable.
+Source-only GitHub updates preserve a machine's native binary, so an older
+bridge continues with the explicitly identified fallback below. SDKs, vendor
+libraries, calibrations and real measurements must stay out of the repository.
+
+## Legacy v2 image-channel fallback
+
 New recordings also write `<name>.fiducials.csv` and a final
 `<name>.fiducials.json` summary. Existing measurements are never rewritten.
 Raw triangulated XYZ observations use camera coordinates in millimetres.

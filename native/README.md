@@ -86,8 +86,7 @@ triggers recovery. During a recording, the interruption is explicitly stored in
 metadata; no old poses or interpolated observations are written to fill it.
 
 This change requires the matching full development SDK (the APIs include
-`ftkMarker64Fiducials` and `ftkRegisterRigidBody`). The older system SDK headers on
-the measurement PC cannot build this source. Runtime DLLs/Python wrappers alone
+`ftkMarker64Fiducials` and `ftkRegisterRigidBody`). Runtime DLLs/Python wrappers alone
 do not provide the required C++ headers/import libraries. Do not adapt the ABI by
 guessing structures or deploy a build against incompatible headers.
 
@@ -97,3 +96,30 @@ hardware acceptance test are required before claiming the new behavior works on
 the camera. The source-only automatic updater preserves the installed native
 binary; `tools/install_local_bridge_update.py` stages a separately built and
 SHA-256-checked bridge into a new local runtime, never into the running App.
+
+## Joint pose/fiducial channel and sparse pixel retrieval
+
+`measurement_protocol.hpp` specifies an additional read-only-consumed ring
+named `<legacy_mapping>_measurements_v1`. `MeasurementSlot` contains original
+pose and triangulated fiducial observations from one SDK query, including the
+SDK correspondence indices. The legacy v2 contract/offsets are unchanged.
+The measurement timestamp is copied from the existing pose publication; it is
+not recomputed or reassigned in Python. Every slot uses a sequence commit and
+readers verify the sequence again after copying. Capacity, version, producer
+identity, bounds and SDK connection epoch are checked. No stale slot is reused
+to fill missing measurements. The publication gate has a quarter-period timing
+tolerance and does not synthesize catch-up frames.
+
+Two preallocated frame queries alternate on a single SDK connection: the fast
+query does not request pixels, the preview query requests them only at the image
+limit. Normal preview target is 20 Hz and measurement target is 335 Hz. Actual
+rates must be measured on the user's device; synthetic tests do not establish
+camera performance. No SDK acquisition mode, calibration or network option is
+changed by this implementation.
+
+The native process watches a handle to its actual parent. If its owner exits,
+it terminates even while the acquisition call is blocked, preventing an orphan
+from continuing to access the camera. CTest tests this with harmless synthetic
+child processes, plus independent packed-layout/clock/association checks.
+These tests do not link to or load the SDK. The bridge itself is only compiled
+during automated verification, never started against live devices.

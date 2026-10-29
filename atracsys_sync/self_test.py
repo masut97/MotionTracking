@@ -514,7 +514,10 @@ def run(output: Path):
                             if spec.sync_mode == "best_effort_host_time_v1"]
         assert software_sources, "Kein Software-Sync-Messskript installiert"
         assert not hardware_requirement(software_sources, "native")
+        from .measurement_self_test import run as joint_measurement_test
+        joint_report = joint_measurement_test(output/'joint_measurements')
         report = {"passed": True, "frames": tracker_metadata["frame_count"], "marker_rows": len(tracker_rows),
+                  "joint_measurement_synthetic_test": joint_report,
                   "script_count": len(manifest["scripts"]), "frequency_hz": 20,
                   "exact_reference_timestamps": True, "hardware_synchronized": False,
                   "measured_fiducial_positions_and_immediate_finalization": True,
