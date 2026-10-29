@@ -255,6 +255,7 @@ class ProfileDialog(QDialog):
             self.marker_names()
         except ValueError as error:
             self.error.setText(str(error)); return
+        self.error.clear()
         self.fill_choice(self.reference)
         self.update_source_choices()
         for row in range(self.pairs.rowCount()):

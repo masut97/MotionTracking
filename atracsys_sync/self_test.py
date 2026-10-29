@@ -163,6 +163,7 @@ def run(output: Path):
         assert instances.reference.currentData() == 299
         assert instances.pairs.cellWidget(0, 2).currentData() == '301:21'
         instances.markers.removeRow(5); instances.refresh_choices()
+        assert not instances.error.text(), 'Corrected duplicate left a stale error message'
         add_pair_button.click()
         assert instances.pairs.rowCount() == 2
         for column, identity in ((1, '302:30'), (2, '302:31')):
