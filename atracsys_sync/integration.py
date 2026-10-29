@@ -25,6 +25,8 @@ def install():
     if getattr(Worker, "_measurement_extension_installed", False):
         return
     install_fast_outlines()
+    from .step_import import install as install_step_import
+    install_step_import()
     main_window.WindowsRegistryControl = RegistryControl
     validate_tracker_contract(recording, MainWindow, NativeBridgeAdapter)
     from .instance_visibility import install as install_instance_visibility

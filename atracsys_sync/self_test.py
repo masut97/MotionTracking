@@ -65,9 +65,11 @@ def run(output: Path):
 
     def init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
-        assert self.windowTitle() == 'Motion Tracking — Version 1.0.0'
+        assert self.windowTitle() == 'Motion Tracking â€” Version 1.0.0'
         assert any(label.text() == 'MOTION TRACKING' for label in self.findChildren(QLabel))
         assert not self.windowIcon().isNull()
+        from .step_import_self_test import run as test_step_import
+        self._step_import_test=test_step_import(output/'synthetic_step_import',root,self)
         self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         windows.append(self)
         self.record_name_edit.setText(recording_name)
@@ -77,7 +79,7 @@ def run(output: Path):
             self.script_panel.table.item(row, 0).setCheckState(Qt.CheckState.Checked if spec.simulated else Qt.CheckState.Unchecked)
         assert self.workspace_tabs.count() == 4
         tab_names = tuple(self.workspace_tabs.tabText(i).split(" (")[0] for i in range(4))
-        assert tab_names == ("Live", "Messgeräte", "Auswertung", "Einstellungen"), tab_names
+        assert tab_names == ("Live", "MessgerÃ¤te", "Auswertung", "Einstellungen"), tab_names
         assert self.findChild(QPushButton, 'stopRecordingButton') is not None
         assert self.record_frequency_spin.lineEdit().isReadOnly() is False
         self.record_frequency_spin.lineEdit().setText('20')
@@ -148,8 +150,8 @@ def run(output: Path):
         instances.reference.setCurrentIndex(instances.reference.findData(299))
         assert instances.value()['comparisons'][0]['target'] == '301:21'
         # Exercise the actual buttons, not only programmatically populated rows.
-        add_marker_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Marker hinzufügen')
-        add_pair_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Vergleich hinzufügen')
+        add_marker_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Marker hinzufÃ¼gen')
+        add_pair_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Vergleich hinzufÃ¼gen')
         add_marker_button.click()  # all visible markers are already listed
         assert instances.markers.rowCount() == 5
         assert instances.reference.currentData() == 299
@@ -520,6 +522,7 @@ def run(output: Path):
         from .measurement_self_test import run as joint_measurement_test
         joint_report = joint_measurement_test(output/'joint_measurements')
         report = {"passed": True, "frames": tracker_metadata["frame_count"], "marker_rows": len(tracker_rows),
+                  "step_import":windows[0]._step_import_test,
                   "joint_measurement_synthetic_test": joint_report,
                   "script_count": len(manifest["scripts"]), "frequency_hz": 20,
                   "exact_reference_timestamps": True, "hardware_synchronized": False,

@@ -1,6 +1,11 @@
 # Motion Tracking
 
-Version **1.0.0**. Installationen liegen künftig unter einem gemeinsamen
+Version **1.0.1**. Der STEP-Importer berücksichtigt die unterschiedlichen
+Baugruppenrichtungen von Fusion und SolidWorks, einschließlich verschachtelter
+Transformationen. Das Einlesen ändert keine gespeicherte Marker-Geometrie.
+Details: [STEP-Import](docs/STEP_IMPORT.md).
+
+Installationen liegen unter einem gemeinsamen
 `MotionTracking_App/versions/<Versionskennung>/App`. Updates erzeugen keine
 zusätzlichen Ordner mit Datum/Uhrzeit. Eine bereits vorbereitete Version wird
 nach Integritäts- und Einstellungsprüfung wiederverwendet; bei Abweichungen
