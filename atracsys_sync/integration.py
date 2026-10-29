@@ -18,10 +18,12 @@ def install():
     from atracsys_tracker.acquisition import AcquisitionWorker
     from atracsys_tracker.adapters.base import FrameTimeoutError
     from .camera_health import CameraGuard, GuardedAdapter, StreamHealth
+    from .overlay_performance import install as install_fast_outlines
 
     Worker = recording.RecordingWorker
     if getattr(Worker, "_measurement_extension_installed", False):
         return
+    install_fast_outlines()
     main_window.WindowsRegistryControl = RegistryControl
     validate_tracker_contract(recording, MainWindow, NativeBridgeAdapter)
     from .instance_visibility import install as install_instance_visibility
