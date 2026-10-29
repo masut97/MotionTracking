@@ -4,6 +4,11 @@ import sys
 
 
 def main():
+    from .single_instance import is_auxiliary, run_gui
+    return run_application() if is_auxiliary(sys.argv) else run_gui(run_application)
+
+
+def run_application():
     if len(sys.argv) == 4 and sys.argv[1] == "--launch-after-exit":
         from .update_ui import launch_after_exit
         return launch_after_exit(int(sys.argv[2]), Path(sys.argv[3]))

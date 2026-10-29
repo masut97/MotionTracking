@@ -81,6 +81,14 @@ Echte GerÃ¤teaufnahme und Dauertest sind zusÃ¤tzliche PrÃ¼fungen am Messpl
 
 ## GitHub und mehrere Computer
 
+Normale Programmstarts verwenden eine Windows-Startsperre über alle neuen
+Installationsordner hinweg. Ein weiterer Start öffnet keine zweite Kamera-
+Verbindung, sondern aktiviert das vorhandene Programmfenster. Die Sperre wird
+vom Betriebssystem auch nach einem Absturz freigegeben. Interne Messskript-
+und Auswertungsprozesse sowie isolierte Selbsttests laufen weiterhin separat.
+Ältere Versionen ohne diese Sperre sollten nicht mehr direkt gestartet werden;
+sichtbare ältere Hauptfenster werden beim Start der neuen Version ebenfalls erkannt.
+
 Öffentliches Repository: https://github.com/masut97/MotionTracking (Branch `main`).
 
 Dieses Repository enthÃ¤lt den bearbeitbaren eigenen Code, Tests und Build-Weg.
