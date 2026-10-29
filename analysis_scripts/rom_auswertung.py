@@ -295,7 +295,8 @@ def _load_current_tracking(path: Path, marker_ids: Sequence[int], *, explicit_in
                     continue
             if marker_id not in wanted:
                 continue
-            if explicit_instances and isinstance(marker_id, int) and row.get('tracking_id', '').strip():
+            if (explicit_instances and not allow_geometry_tracking_changes
+                    and isinstance(marker_id, int) and row.get('tracking_id', '').strip()):
                 geometry_tracks.setdefault(marker_id, set()).add(row['tracking_id'].strip())
             if row.get("visible", "") != "1":
                 if row.get("visible", "") == "0":
