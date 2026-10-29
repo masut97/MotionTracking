@@ -10,7 +10,7 @@ AUXILIARY = {'--sync-worker', '--launch-after-exit', '--sync-self-test',
 
 
 def is_auxiliary(argv):
-    return len(argv) >= 3 and argv[1] in AUXILIARY
+    return len(argv) >= 3 and bool(argv[2]) and argv[1] in AUXILIARY
 
 
 class InstanceGuard:

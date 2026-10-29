@@ -12,6 +12,7 @@ from atracsys_sync import single_instance as single
 @pytest.mark.parametrize('args,expected', [
     (['app'], False), (['app', '--mode', 'hardware'], False),
     (['app', '--mode', 'mock'], False),
+    (['app', '--run-analysis', '', '--mode', 'hardware'], False),
     (['app', '--sync-worker', '1234', 'token'], True),
     (['app', '--run-analysis', 'script.py', '--analysis-input', 'test.csv'], True),
     (['app', '--sync-self-test', 'isolated-output'], True),
@@ -72,7 +73,7 @@ def mutex_owner(name, connection):
 @pytest.mark.parametrize('crash',[False,True])
 def test_second_process_blocked_and_lock_recovers_after_normal_exit_or_crash(crash):
     ctx=mp.get_context('spawn')
-    name=r'Local\MotionTracking-synthetic-'+uuid.uuid4().hex
+    name=r'Global\MotionTracking-synthetic-'+uuid.uuid4().hex
     parent,child=ctx.Pipe()
     process=ctx.Process(target=mutex_owner,args=(name,child))
     process.start();child.close()
