@@ -50,7 +50,7 @@ def test_cannot_force_ambiguous_or_distant_observations_into_marker():
 def test_presence_mask_and_invalid_status_never_create_positions():
     rows = observation_rows(frame([fid(1, (10, 20, 1000))], [marker(mask=2)]), DEFS)
     assert rows[0]['assignment_status'] == 'unassigned'
-    assert next(r for r in rows if r.get('geometry_fiducial_number') == 1)['assignment_status'] == 'not_observed'
+    assert next(r for r in rows if r.get('geometry_fiducial_number') == 1)['assignment_status'] == 'not_in_marker_presence_mask'
     rows = observation_rows(frame([fid(1, (10, 20, 1000), '0x00000001')], [marker()]), DEFS)
     assert rows[0]['visible'] == 0 and 'x_mm' not in rows[0]
 

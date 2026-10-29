@@ -12,7 +12,8 @@ of the selected pose recording frequency. It never upsamples, repeats old
 observations or fills absent measurements. Original device timestamps, frame
 counters and image-frame host timestamps are preserved. Join with pose data by
 device timestamp and frame counter; do not join by CSV row number or assume
-identical host timestamps for the two publication channels.
+identical host timestamps for the two publication channels. The v2 bridge
+supplies at most 256 triangulated observations in an image frame.
 
 `frame_fiducial_index` is the SDK observation-array index for that frame; it is
 not a stable physical sphere number. `geometry_fiducial_number` is 1-based in
@@ -31,6 +32,10 @@ marker or sphere IDs. Missing or invalid observations have no XYZ values.
 Missing rows can be named only while their marker instance is recognised;
 an entirely unrecognised marker cannot be assigned a tracking identity.
 No image-frame row means no assertion about marker visibility for that time.
+`visible=1` denotes a valid measured observation, not independent proof of
+physical visibility of a named sphere. `not_in_marker_presence_mask` means the
+SDK did not include that sphere in its marker fit; this alone does not prove
+occlusion or a camera acquisition gap.
 
 A bounded background queue isolates disk output from acquisition. The final
 summary records actual exported frame/row counts, queue losses, definition

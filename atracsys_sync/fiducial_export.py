@@ -107,7 +107,7 @@ def observation_rows(frame, definitions):
         if j not in used:
             rows.append(dict(geometry_id=marker, tracking_id=tracking,
                              geometry_fiducial_number=number, visible=0,
-                             assignment_status='not_uniquely_assigned' if present else 'not_observed'))
+                             assignment_status='not_uniquely_assigned' if present else 'not_in_marker_presence_mask'))
     if not rows:
         rows.append(dict(visible=0, assignment_status='no_triangulated_fiducials'))
     return rows
