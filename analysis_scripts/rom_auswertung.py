@@ -244,7 +244,7 @@ def _valid_pose(pose: RomPose) -> bool:
 
 
 def _load_current_tracking(path: Path, marker_ids: Sequence[int], *, explicit_instances=False,
-                           reject_duplicate_poses=False) -> RomTrackingData:
+                           reject_duplicate_poses=False, allow_geometry_tracking_changes=False) -> RomTrackingData:
     frames: dict[str, dict[int, RomPose]] = {}
     frame_times: dict[str, float] = {}
     total_rows = 0
@@ -321,7 +321,7 @@ def _load_current_tracking(path: Path, marker_ids: Sequence[int], *, explicit_in
 
     for sample, marker_id in ambiguous:
         frames[sample].pop(marker_id, None)
-    if explicit_instances:
+    if explicit_instances and not allow_geometry_tracking_changes:
         for marker_id, tracks in geometry_tracks.items():
             if len(tracks) > 1:
                 # Even non-overlapping tracking IDs must not be spliced into one object.

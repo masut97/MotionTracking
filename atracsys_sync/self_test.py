@@ -142,25 +142,25 @@ def run(output: Path):
         instances = ProfileDialog(root, parent=self, visible_choices=lambda: visible)
         assert instances.markers.rowCount() == 5
         instances.add_pair(dict(name='Two instances', anchor='301:20', target='301:21', outputs=['tx'], axis=[0,0,1]))
-        instances.reference.setCurrentIndex(instances.reference.findData('299:10'))
+        instances.reference.setCurrentIndex(instances.reference.findData(299))
         assert instances.value()['comparisons'][0]['target'] == '301:21'
         # Exercise the actual buttons, not only programmatically populated rows.
         add_marker_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Marker hinzufügen')
         add_pair_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Vergleich hinzufügen')
         add_marker_button.click()  # all visible markers are already listed
         assert instances.markers.rowCount() == 5
-        assert instances.reference.currentData() == '299:10'
+        assert instances.reference.currentData() == 299
         instances.markers.selectRow(4); instances.remove_rows(instances.markers)
-        assert instances.reference.currentData() == '299:10'
+        assert instances.reference.currentData() == 299
         QTimer.singleShot(0, lambda: QApplication.activeModalWidget().accept())
         add_marker_button.click()
         assert instances.markers.rowCount() == 5
-        assert instances.reference.currentData() == '299:10'
+        assert instances.reference.currentData() == 299
         assert instances.pairs.cellWidget(0, 1).currentData() == '301:20'
         assert instances.pairs.cellWidget(0, 2).currentData() == '301:21'
         # A duplicate/incomplete edit must not empty otherwise valid choices.
         instances.add_marker('301:20', 'Duplicate test')
-        assert instances.reference.currentData() == '299:10'
+        assert instances.reference.currentData() == 299
         assert instances.pairs.cellWidget(0, 2).currentData() == '301:21'
         instances.markers.removeRow(5); instances.refresh_choices()
         add_pair_button.click()
@@ -177,7 +177,7 @@ def run(output: Path):
         target = instances.pairs.cellWidget(0, 2)
         assert target.currentData() == '301:21'
         assert not target.model().item(target.currentIndex()).isEnabled()
-        assert instances.reference.currentData() == '299:10'
+        assert instances.reference.currentData() == 299
         try:
             instances.value()
         except ValueError:
@@ -185,6 +185,30 @@ def run(output: Path):
         else:
             raise AssertionError('Invisible instance accepted')
         instances.close(); instances.deleteLater()
+        # Explicit user conversion preserves roles/names despite per-frame ID changes.
+        live = {'299:10':'299', '302:20':'302', '351:30':'351'}
+        volatile = dict(version=1, name='Rebind', reference='299:10', baseline_seconds=0,
+            markers={'299:10':'Reference', '302:20':'Base', '351:30':'Object'},
+            comparisons=[dict(name='Object vs base', anchor='302:20', target='351:30', outputs=['tx'], axis=[0,0,1])])
+        rebinding = ProfileDialog(root, volatile, self, visible_choices=lambda: live)
+        rebinding.use_unique_geometries()
+        rebound = rebinding.value()
+        assert rebound['markers'] == {'299':'Reference', '302':'Base', '351':'Object'}
+        assert rebound['reference'] == 299
+        assert rebound['comparisons'][0]['anchor'] == 302
+        assert rebound['comparisons'][0]['target'] == 351
+        live.clear(); live.update({'299:400':'299', '302:500':'302', '351:600':'351'})
+        assert rebinding.value() == rebound
+        rebinding.use_visible()
+        assert rebinding.markers.rowCount() == 3
+        live['351:601'] = 'Second 351'
+        try:
+            rebinding.value()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Geometry binding accepted simultaneous ambiguous instances')
+        rebinding.deleteLater()
         controller = self.free_analysis_controller
         original_start = self.script_panel.start_recording
         calls = []

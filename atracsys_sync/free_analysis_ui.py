@@ -20,6 +20,7 @@ def backend(root):
 
 
 from .profile_store import save_profile
+from .marker_selection import selection_choices, csv_marker_choices
 
 
 class ProfileDialog(QDialog):
@@ -27,13 +28,14 @@ class ProfileDialog(QDialog):
         super().__init__(parent)
         self.analysis = backend(root)
         self.visible_choices = visible_choices
-        self.choice_snapshot = visible_choices() if visible_choices is not None else None
+        self.choice_snapshot = selection_choices(visible_choices()) if visible_choices is not None else None
         self.setWindowTitle('Freie Markerzuordnung')
         self.resize(1000, 770)
         layout = QVBoxLayout(self)
         explanation = QLabel('Marker frei benennen und Vergleiche definieren. „Ziel relativ zu Basis“ entfernt die Bewegung der Basis; '
-                             'der Referenzmarker bestimmt die Ausgabeachsen. Instanzen werden über Geometrie:Tracking-ID getrennt. '
-                             'Nach Neuverbindung oder ID-Wechsel muss die Zuordnung geprüft werden; keine automatische Ersatzzuordnung.')
+                             'der Referenzmarker bestimmt die Ausgabeachsen. Für eine einzelne Instanz je Geometrie die Geometrie-ID verwenden: '
+                             'Tracking-IDs können bei jedem Bild wechseln. Mehrere gleichartige Marker werden nicht automatisch gleichgesetzt. '
+                             'Ein physischer Austausch von Markern gleicher Geometrie ist damit nicht erkennbar.')
         explanation.setWordWrap(True); layout.addWidget(explanation)
         form = QFormLayout()
         self.name = QLineEdit('Freies Messprofil'); self.name.setMaxLength(80)
@@ -45,8 +47,8 @@ class ProfileDialog(QDialog):
         form.addRow('Baseline vor der Bewegung', self.baseline); layout.addLayout(form)
         layout.addWidget(QLabel('1 · Marker-IDs und frei wählbare Namen'))
         self.markers = QTableWidget(0, 2); self.markers.setObjectName('freeMarkerTable')
-        self.markers.setHorizontalHeaderLabels(['Geometrie-ID:Tracking-ID', 'Name / Bedeutung'])
-        self.markers.setColumnWidth(0, 210)
+        self.markers.setHorizontalHeaderLabels(['Geometrie / Instanz', 'Name / Bedeutung'])
+        self.markers.setColumnWidth(0, 470)
         self.markers.horizontalHeader().setStretchLastSection(True)
         self.markers.setMaximumHeight(175); layout.addWidget(self.markers)
         row = QHBoxLayout()
@@ -54,7 +56,10 @@ class ProfileDialog(QDialog):
         self._button(row, 'Markierte Marker entfernen', lambda: self.remove_rows(self.markers))
         self._button(row, 'IDs aus CSV übernehmen …', self.ids_from_csv)
         if self.visible_choices is not None:
+            row.addStretch(1); layout.addLayout(row)
+            row = QHBoxLayout()
             self._button(row, 'Sichtbare Instanzen übernehmen', self.use_visible)
+            self._button(row, 'Eindeutige Geometrien verwenden', self.use_unique_geometries)
         row.addStretch(1); layout.addLayout(row)
         layout.addWidget(QLabel('2 · Vergleiche: Ziel relativ zu Basis (beliebig viele, maximal 32)'))
         self.pairs = QTableWidget(0, 5); self.pairs.setObjectName('freeComparisonTable')
@@ -81,8 +86,9 @@ class ProfileDialog(QDialog):
             self.use_visible()
 
     def use_visible(self):
-        names = self.visible_choices()
-        self.choice_snapshot = names
+        raw = self.visible_choices()
+        names = selection_choices(raw, preferred=True)
+        self.choice_snapshot = selection_choices(raw)
         try:
             previous_names = self.marker_names()
         except ValueError:
@@ -92,12 +98,73 @@ class ProfileDialog(QDialog):
             # Retain configured identities and labels, including a temporarily lost
             # reference. Missing identities are displayed disabled, never rebound.
             for marker, label in names.items():
-                if marker not in previous_names:
-                    self.add_marker(marker, label)
+                if marker not in previous_names and not any(
+                        ':' not in marker and key.split(':')[0] == marker for key in previous_names):
+                    self.add_marker(marker, str(marker).split(':')[0])
         finally:
             self.markers.blockSignals(False)
         self.refresh_choices()
-        self.error.setText('Nur aktuell sichtbare Instanzen. Tracking-IDs können nach Neuverbindung wechseln; Zuordnung dann neu prüfen.')
+        self.error.setText('Geometrie-ID = genau eine Instanz je Bild. Bei mehreren Instanzen ist eine ausdrückliche Auswahl erforderlich; keine automatische Ersatzzuordnung.')
+
+    def use_unique_geometries(self):
+        self.choice_snapshot = selection_choices(self.visible_choices())
+        for row in range(self.markers.rowCount()):
+            key = self.markers.item(row, 0).text().strip()
+            geometry = key.split(':')[0]
+            if ':' in key and geometry in self.choice_snapshot:
+                self.change_selector(row, geometry)
+        self.refresh_choices()
+        self.error.setText('Eindeutige Geometrien umgestellt. Namen, Referenz und Vergleiche bleiben erhalten. Mehrfach vorkommende Geometrien wurden nicht ersetzt.')
+
+    def change_selector(self, row, new_key):
+        old_key = self.markers.item(row, 0).text().strip()
+        new_key = str(new_key)
+        if old_key == new_key:
+            return
+        def overlaps(key):
+            return key.split(':')[0] == new_key.split(':')[0] and (key == new_key or ':' not in key or ':' not in new_key)
+        if any(r != row and overlaps(self.markers.item(r, 0).text().strip())
+               for r in range(self.markers.rowCount())):
+            self.error.setText('Diese Zuordnung wird bereits von einem anderen Marker verwendet.')
+            self.update_source_choices()
+            return
+        combos = [self.reference] + [self.pairs.cellWidget(r, c)
+                                     for r in range(self.pairs.rowCount()) for c in (1, 2)]
+        previous = [combo.currentData() for combo in combos]
+        blocked = self.markers.blockSignals(True)
+        self.markers.item(row, 0).setText(new_key)
+        self.markers.blockSignals(blocked)
+        for combo, selected in zip(combos, previous):
+            self.fill_choice(combo, self.analysis.marker_selector(new_key)
+                             if str(selected) == old_key else selected)
+        self.update_source_choices()
+
+    def update_source_choices(self):
+        if self.choice_snapshot is None:
+            return
+        for row in range(self.markers.rowCount()):
+            selected = self.markers.item(row, 0).text().strip()
+            combo = self.markers.cellWidget(row, 0)
+            if combo is None:
+                combo = QComboBox()
+                self.markers.setCellWidget(row, 0, combo)
+                def changed(_index, source=combo):
+                    if source.currentData() is None:
+                        return
+                    for current in range(self.markers.rowCount()):
+                        if self.markers.cellWidget(current, 0) is source:
+                            self.change_selector(current, source.currentData())
+                            break
+                combo.currentIndexChanged.connect(changed)
+            combo.blockSignals(True)
+            combo.clear()
+            for key, label in self.choice_snapshot.items():
+                combo.addItem(f'{label} ({key})', key)
+            if combo.findData(selected) < 0:
+                combo.addItem(f'Nicht verfügbar · {selected}', selected)
+                combo.model().item(combo.count()-1).setEnabled(False)
+            combo.setCurrentIndex(combo.findData(selected))
+            combo.blockSignals(False)
 
     @staticmethod
     def _button(layout, label, action):
@@ -122,12 +189,13 @@ class ProfileDialog(QDialog):
             self.refresh_choices()
 
     def add_visible_marker(self):
-        visible = self.visible_choices()
+        visible = selection_choices(self.visible_choices(), preferred=True)
         try:
             existing = self.marker_names()
         except ValueError as error:
             self.error.setText(str(error)); return
-        available = {key: label for key, label in visible.items() if key not in existing}
+        available = {key: label for key, label in visible.items() if key not in existing and not any(
+            key.split(':')[0] == old.split(':')[0] and (':' not in key or ':' not in old) for old in existing)}
         if not available:
             self.error.setText('Alle aktuell sichtbaren Instanzen sind bereits in der Markerliste. Unten „Vergleich hinzufügen“ wählen.')
             return
@@ -135,7 +203,7 @@ class ProfileDialog(QDialog):
         selected, accepted = QInputDialog.getItem(self, 'Sichtbaren Marker hinzufügen', 'Instanz', labels, 0, False)
         if accepted:
             key = list(available)[labels.index(selected)]
-            self.choice_snapshot = visible
+            self.choice_snapshot = selection_choices(self.visible_choices())
             self.add_marker(key, available[key])
 
     def remove_rows(self, table):
@@ -188,6 +256,7 @@ class ProfileDialog(QDialog):
         except ValueError as error:
             self.error.setText(str(error)); return
         self.fill_choice(self.reference)
+        self.update_source_choices()
         for row in range(self.pairs.rowCount()):
             for col in (1, 2):
                 combo = self.pairs.cellWidget(row, col)
@@ -215,7 +284,7 @@ class ProfileDialog(QDialog):
 
     def value(self):
         if self.visible_choices is not None:
-            visible = self.visible_choices()
+            visible = selection_choices(self.visible_choices())
             used = [self.reference.currentData()]
             for row in range(self.pairs.rowCount()):
                 used.extend(self.pairs.cellWidget(row, col).currentData() for col in (1, 2))
@@ -241,9 +310,11 @@ class ProfileDialog(QDialog):
             names = profile['markers']
             if self.visible_choices is not None:
                 names = dict(names)
-                self.choice_snapshot = self.visible_choices()
-                for key, label in self.choice_snapshot.items():
-                    names.setdefault(key, label)
+                raw = self.visible_choices()
+                self.choice_snapshot = selection_choices(raw)
+                for key, label in selection_choices(raw, preferred=True).items():
+                    if not any(existing.split(':')[0] == key.split(':')[0] for existing in names):
+                        names.setdefault(key, key.split(':')[0])
             for marker, label in names.items():
                 self.add_marker(marker, label)
         finally:
@@ -252,17 +323,17 @@ class ProfileDialog(QDialog):
         self.fill_choice(self.reference, profile['reference'])
         for pair in profile['comparisons']:
             self.add_pair(pair)
+        self.update_source_choices()
 
     def ids_from_csv(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Marker-IDs aus Aufnahme übernehmen', '', 'CSV (*.csv)')
         if path:
             try:
-                import csv
                 known = self.marker_names()
-                with Path(path).open(encoding='utf-8-sig', newline='') as stream:
-                    keys = {f"{row['geometry_id']}:{row['tracking_id']}" if row.get('tracking_id','').strip() else row['geometry_id']
-                            for row in csv.DictReader(stream) if row.get('visible') == '1' and row.get('geometry_id','').strip()}
-                for marker in sorted(keys):
+                choices = csv_marker_choices(path)
+                if self.visible_choices is None:
+                    self.choice_snapshot = choices
+                for marker in sorted(choices):
                     self.analysis.marker_selector(marker)
                     if marker not in known:
                         self.add_marker(marker)

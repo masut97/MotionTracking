@@ -45,7 +45,8 @@ def analyze(source, profile, output=None):
         ref, anchor, target = profile['reference'], pair['anchor'], pair['target']
         result = dict(index=index, comparison=pair, issues=[], times_s=[], curves={}, statistics={})
         try:
-            data = tracking._load_current_tracking(source, sorted({ref, anchor, target}, key=str), explicit_instances=True)
+            data = tracking._load_current_tracking(source, sorted({ref, anchor, target}, key=str),
+                explicit_instances=True, allow_geometry_tracking_changes=True)
         except ValueError:
             result['issues'].append(f'No complete unambiguous valid samples for reference {ref}, anchor {anchor}, target {target}. Check geometry/tracking IDs, marker visibility and pose validity. Multiple instances require explicit tracking IDs.')
             results.append(result)
@@ -94,6 +95,7 @@ def analyze(source, profile, output=None):
     output.mkdir(parents=True, exist_ok=False)
     digest = hashlib.sha256(json.dumps(profile, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
     report = dict(analysis='free_marker_motion', input=str(source), profile=profile, profile_sha256=digest,
+                  identity_policy='Geometry-only selectors require one unambiguous valid pose per received frame; tracking-ID changes are allowed. Explicit geometry:tracking selectors never substitute another ID. Physical replacements sharing one geometry cannot be distinguished.',
                   protocol_approval=False, reference_axes='instantaneous recorded reference-marker axes',
                   time_origin=time_origin,
                   rotation_convention='shortest rotation vector; axis projection is not an Euler angle; net magnitude 0–180 deg',

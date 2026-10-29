@@ -50,6 +50,9 @@ def validate_profile(value):
     if len({name.casefold() for name in normalized.values()}) != len(normalized):
         raise ValueError('Marker names must be distinct.')
     profile['markers'] = normalized
+    for key in normalized:
+        if ':' in key and key.split(':')[0] in normalized:
+            raise ValueError('Do not mix a geometry-only selector with an explicit instance of the same geometry.')
     ref = profile.get('reference')
     if marker_selector(ref) != ref or str(ref) not in normalized:
         raise ValueError('Select a reference marker from the defined marker IDs.')
