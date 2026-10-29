@@ -329,17 +329,25 @@ class ProfileDialog(QDialog):
         path, _ = QFileDialog.getOpenFileName(self, 'Marker-IDs aus Aufnahme übernehmen', '', 'CSV (*.csv)')
         if path:
             try:
-                known = self.marker_names()
-                choices = csv_marker_choices(path)
-                if self.visible_choices is None:
-                    self.choice_snapshot = choices
-                for marker in sorted(choices):
-                    self.analysis.marker_selector(marker)
-                    if marker not in known:
-                        self.add_marker(marker)
-                self.refresh_choices()
+                self.apply_csv_choices(csv_marker_choices(path))
             except Exception as error:
                 self.error.setText(str(error))
+
+    def apply_csv_choices(self, choices):
+        self.choice_snapshot = (selection_choices(self.visible_choices())
+                                if self.visible_choices is not None else choices)
+        for row in range(self.markers.rowCount()):
+            old = self.markers.item(row, 0).text().strip()
+            geometry = old.split(':')[0]
+            if ':' in old and geometry in choices and geometry in self.choice_snapshot:
+                self.change_selector(row, geometry)
+        known = self.marker_names()
+        for marker in sorted(choices):
+            self.analysis.marker_selector(marker)
+            if marker not in known and not any(marker.split(':')[0] == old.split(':')[0]
+                    and (':' not in marker or ':' not in old) for old in known):
+                self.add_marker(marker)
+        self.refresh_choices()
 
     def import_profile(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Profil laden', '', 'JSON (*.json)')

@@ -209,6 +209,11 @@ def run(output: Path):
         else:
             raise AssertionError('Geometry binding accepted simultaneous ambiguous instances')
         rebinding.deleteLater()
+        csv_rebinding = ProfileDialog(root, volatile, self)
+        csv_rebinding.apply_csv_choices({'299':'Reference', '302':'Base', '351':'Object'})
+        assert csv_rebinding.value() == rebound
+        assert csv_rebinding.markers.rowCount() == 3
+        csv_rebinding.deleteLater()
         controller = self.free_analysis_controller
         original_start = self.script_panel.start_recording
         calls = []
