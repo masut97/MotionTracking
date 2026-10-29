@@ -7,9 +7,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, QThread, Qt, QUrl, Signal
 from PySide6.QtGui import QAction, QDesktopServices
-from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QGroupBox,
+from PySide6.QtWidgets import (QFileDialog, QFrame, QGroupBox,
     QHBoxLayout, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton,
     QTabWidget, QToolButton, QVBoxLayout, QWidget)
+from .drag_drop_scope import install_drop_filters, owned_event_type
 
 
 ROM_MODES = ("FE", "LB", "AR", "AS", "LS", "AC")
@@ -110,7 +111,7 @@ class _RetrospectiveController(QObject):
         self.select_button = select_button
         self.drop_zone = drop_zone
         self.worker = None
-        QApplication.instance().installEventFilter(self)
+        self._drop_targets=install_drop_filters(window,drop_zone,self,QWidget)
         select_button.clicked.connect(self.select_files)
 
     @staticmethod
@@ -124,25 +125,19 @@ class _RetrospectiveController(QObject):
                 paths.append(path.resolve())
         return paths
 
-    def _belongs_to_window(self, watched):
-        try:
-            return watched is self.window or watched.window() is self.window
-        except (AttributeError, RuntimeError):
-            return False
-
     def _highlight(self, enabled):
         self.drop_zone.setProperty("dragActive", enabled)
         self.drop_zone.style().unpolish(self.drop_zone)
         self.drop_zone.style().polish(self.drop_zone)
 
     def eventFilter(self, watched, event):
-        event_type = event.type()
+        event_type = owned_event_type(watched,event,self.window,QWidget)
         if event_type not in (
             QEvent.Type.DragEnter,
             QEvent.Type.DragMove,
             QEvent.Type.DragLeave,
             QEvent.Type.Drop,
-        ) or not self._belongs_to_window(watched):
+        ):
             return False
         if event_type == QEvent.Type.DragLeave:
             self._highlight(False)

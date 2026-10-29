@@ -1,6 +1,6 @@
 # Motion Tracking
 
-Version **1.0.1**. Der STEP-Importer berücksichtigt die unterschiedlichen
+Version **1.0.2**. Der STEP-Importer berücksichtigt die unterschiedlichen
 Baugruppenrichtungen von Fusion und SolidWorks, einschließlich verschachtelter
 Transformationen. Das Einlesen ändert keine gespeicherte Marker-Geometrie.
 Details: [STEP-Import](docs/STEP_IMPORT.md).

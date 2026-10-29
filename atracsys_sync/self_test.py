@@ -23,6 +23,16 @@ class _MemoryRegistry:
 
 def run(output: Path):
     output.mkdir(parents=True, exist_ok=True)
+    import faulthandler
+    with (output/'native-fault.log').open('w', encoding='utf-8') as fault_log:
+        faulthandler.enable(file=fault_log, all_threads=True)
+        try:
+            return _run(output)
+        finally:
+            faulthandler.disable()
+
+
+def _run(output):
     from PySide6.QtCore import QPoint, QRect, Qt, QTimer
     from PySide6.QtWidgets import QApplication, QToolButton, QPushButton, QLabel
     from atracsys_tracker import app
@@ -71,6 +81,8 @@ def run(output: Path):
         assert not self.windowIcon().isNull()
         from .step_import_self_test import run as test_step_import
         self._step_import_test=test_step_import(output/'synthetic_step_import',root,self)
+        from .qt_event_self_test import run as test_qt_event_scope
+        self._qt_event_test=test_qt_event_scope(output/'synthetic_qt_events')
         self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         windows.append(self)
         self.record_name_edit.setText(recording_name)
@@ -524,6 +536,7 @@ def run(output: Path):
         joint_report = joint_measurement_test(output/'joint_measurements')
         report = {"passed": True, "frames": tracker_metadata["frame_count"], "marker_rows": len(tracker_rows),
                   "step_import":windows[0]._step_import_test,
+                  "qt_event_scope":windows[0]._qt_event_test,
                   "joint_measurement_synthetic_test": joint_report,
                   "script_count": len(manifest["scripts"]), "frequency_hz": 20,
                   "exact_reference_timestamps": True, "hardware_synchronized": False,
