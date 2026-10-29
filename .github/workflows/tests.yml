@@ -27,11 +27,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python tools/create_update.py --output dist/AtracsysTracking-update.zip
+      - run: python tools/create_update.py --output dist/MotionTracking-update.zip
+      - name: Keep older installed update clients compatible
+        shell: pwsh
+        run: |
+          Copy-Item dist/MotionTracking-update.zip dist/AtracsysTracking-update.zip
+          Copy-Item dist/MotionTracking-update.zip.sha256 dist/AtracsysTracking-update.zip.sha256
       - name: Publish tested source update
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = 'update-' + '${{ github.sha }}'
-          gh release create $tag dist/AtracsysTracking-update.zip dist/AtracsysTracking-update.zip.sha256 --repo '${{ github.repository }}' --target '${{ github.sha }}' --title ('Geprueftes Update ' + '${{ github.sha }}'.Substring(0,12)) --notes 'Automatisch nach bestandenen Regressionstests. Nur eigener Code; lokale Messdaten und Kalibrierungen bleiben erhalten.' --latest
+          gh release create $tag dist/MotionTracking-update.zip dist/MotionTracking-update.zip.sha256 dist/AtracsysTracking-update.zip dist/AtracsysTracking-update.zip.sha256 --repo '${{ github.repository }}' --target '${{ github.sha }}' --title ('Motion Tracking ' + '${{ github.sha }}'.Substring(0,12)) --notes 'Automatisch nach bestandenen Regressionstests. Nur eigener Code; lokale Messdaten und Kalibrierungen bleiben erhalten. Legacy asset names support older installed update clients.' --latest

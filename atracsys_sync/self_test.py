@@ -24,7 +24,7 @@ class _MemoryRegistry:
 def run(output: Path):
     output.mkdir(parents=True, exist_ok=True)
     from PySide6.QtCore import QPoint, QRect, Qt, QTimer
-    from PySide6.QtWidgets import QApplication, QToolButton, QPushButton
+    from PySide6.QtWidgets import QApplication, QToolButton, QPushButton, QLabel
     from atracsys_tracker import app
     from atracsys_tracker.ui.main_window import MainWindow
     from .protocol import hardware_requirement
@@ -65,6 +65,9 @@ def run(output: Path):
 
     def init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
+        assert self.windowTitle() == 'Motion Tracking'
+        assert any(label.text() == 'MOTION TRACKING' for label in self.findChildren(QLabel))
+        assert not self.windowIcon().isNull()
         self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         windows.append(self)
         self.record_name_edit.setText(recording_name)

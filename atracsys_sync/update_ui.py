@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
 
 from .github_updates import FLAGS, download_release, latest_release
 from .updater import install_update, load_update_settings
+from .shortcuts import switch_shortcut
 
 
 def verify_mock(app):
@@ -27,57 +28,6 @@ def verify_mock(app):
         if process.returncode or not result.is_file() or not json.loads(result.read_text())["passed"]:
             raise RuntimeError("Programm-Selbsttest fehlgeschlagen. Die bisherige Version bleibt aktiv.")
     return {"passed": True}
-
-
-def switch_shortcut(app):
-    """Replace only our desktop shortcut, keeping its previous target as backup."""
-    app = Path(app).resolve()
-    script = '''param([string]$Target,[string]$Backup)
-$ErrorActionPreference='Stop'
-function Get-Sha256([string]$Path){
-    $algorithm=[Security.Cryptography.SHA256]::Create()
-    $stream=$null
-    try{
-        $stream=[IO.File]::OpenRead($Path)
-        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-','').ToLowerInvariant()
-    }finally{
-        if($null -ne $stream){$stream.Dispose()}
-        $algorithm.Dispose()
-    }
-}
-$desktop=[Environment]::GetFolderPath('Desktop')
-$link=Join-Path $desktop 'Atracsys Tracking.lnk'
-$temporary=Join-Path $desktop ('Atracsys Tracking.'+[Guid]::NewGuid().ToString()+'.lnk')
-$shell=New-Object -ComObject WScript.Shell
-$s=$shell.CreateShortcut($temporary)
-$s.TargetPath=$Target
-$s.WorkingDirectory=Split-Path $Target
-$s.Arguments='--mode hardware'
-$s.Save()
-if(Test-Path -LiteralPath $link){
-    $localBackup=Join-Path $desktop ('AtracsysTracking-backup-'+[Guid]::NewGuid().ToString()+'.lnk')
-    [IO.File]::Replace($temporary,$link,$localBackup)
-    try {
-        Copy-Item -LiteralPath $localBackup -Destination $Backup
-    if((Get-Sha256 $localBackup) -ne (Get-Sha256 $Backup)){throw 'Shortcut backup verification failed'}
-        Remove-Item -LiteralPath $localBackup
-    } catch {
-        $discard=Join-Path $desktop ('AtracsysTracking-rollback-'+[Guid]::NewGuid().ToString()+'.lnk')
-        [IO.File]::Replace($localBackup,$link,$discard)
-        Remove-Item -LiteralPath $discard
-        throw
-    }
-}else{[IO.File]::Move($temporary,$link)}
-'''
-    with tempfile.TemporaryDirectory(prefix="atracsys-shortcut-") as temporary:
-        path = Path(temporary) / "shortcut.ps1"
-        path.write_text(script, encoding="utf-8-sig")
-        result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                                 "-File", str(path), "-Target", str(app / "AtracsysLiveTracker_Messskripte.exe"),
-                                 "-Backup", str(app.parent / "previous-desktop-shortcut.lnk")],
-                                capture_output=True, timeout=20, creationflags=FLAGS)
-        if result.returncode:
-            raise RuntimeError(f"Neue Version ist geprüft, aber die Verknüpfung konnte nicht umgestellt werden: {app}")
 
 
 def launch_after_exit(pid, app):

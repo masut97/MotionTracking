@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Start','Stop','Finalize','Plan','Prepare','Abort')][string]$Action,
     [string]$Root = 'C:\Users\Zwick Biaxial\Documents\Spine_Tester_Red',
@@ -77,7 +77,7 @@ try {
         } while ([DateTime]::UtcNow -lt $deadline)
         throw 'Camera not ready within timeout. Check camera connection and the current Atracsys app version.'
     }
-    if (-not (Test-Path -LiteralPath $ControlPath)) { throw 'Atracsys app is not ready. Open Atracsys Tracking under the same Windows account as testXpert.' }
+    if (-not (Test-Path -LiteralPath $ControlPath)) { throw 'Motion Tracking is not ready. Open Motion Tracking under the same Windows account as testXpert.' }
     if ($Action -eq 'Start') {
         $s=Read-Control
         $now=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()

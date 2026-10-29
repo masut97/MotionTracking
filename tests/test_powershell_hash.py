@@ -19,10 +19,8 @@ def test_dotnet_checksum_has_no_module_dependency(tmp_path, source):
     if source == "installer":
         script = (ROOT / "packaging/Installieren.ps1").read_text(encoding="utf-8")
     else:
-        tree = ast.parse((ROOT / "atracsys_sync/update_ui.py").read_text(encoding="utf-8"))
-        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "switch_shortcut")
-        assignment = next(node for node in function.body if isinstance(node, ast.Assign) and node.targets[0].id == "script")
-        script = ast.literal_eval(assignment.value)
+        from atracsys_sync.shortcuts import SCRIPT
+        script = SCRIPT
     helper = re.search(r"function Get-Sha256.*?\n}\n", script, re.S).group()
     content = b"module-independent checksum\x00\xff"
     payload = tmp_path / "file with spaces.bin"

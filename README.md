@@ -1,4 +1,6 @@
-# Atracsys Messskripte
+# Motion Tracking
+
+Independent project for use with Atracsys tracking hardware. Not affiliated with, endorsed by, or supported by Atracsys. Manufacturer names identify supported hardware only. Rights and licence requirements for third-party software remain separate.
 
 Eigene Erweiterung fÃ¼r fusionTrack500, externe Messskripte (ESP32/NAU7802),
 gemeinsame Aufnahmen und nachtrÃ¤gliche Auswertung. Ohne Hardware-Trigger wird
@@ -79,7 +81,7 @@ Echte GerÃ¤teaufnahme und Dauertest sind zusÃ¤tzliche PrÃ¼fungen am Messpl
 
 ## GitHub und mehrere Computer
 
-Öffentliches Repository: https://github.com/masut97/AtracsysTracking (Branch `main`).
+Öffentliches Repository: https://github.com/masut97/MotionTracking (Branch `main`).
 
 Dieses Repository enthÃ¤lt den bearbeitbaren eigenen Code, Tests und Build-Weg.
 Eine neue Version wird erst nach Review und grÃ¼nen Tests verÃ¶ffentlicht.
@@ -103,8 +105,8 @@ werden ausschlieÃŸlich lokal Ã¼bernommen und nicht auf GitHub hochgeladen.
 FÃ¼r die Entwicklung auf weiteren PCs klonen und die Umgebung wie oben einrichten:
 
 ```powershell
-git clone https://github.com/masut97/AtracsysTracking.git
-cd AtracsysTracking
+git clone https://github.com/masut97/MotionTracking.git
+cd MotionTracking
 ```
 
 Danach erfolgt die Ã¼bliche Arbeit Ã¼ber Branch, Pull Request und Tests. Den

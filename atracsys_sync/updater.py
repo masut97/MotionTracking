@@ -221,6 +221,8 @@ def install_update(current_app, archive, target_parent, expected_sha256, revisio
         measurement = config.get("measurement_directory")
         excluded = {_configured_path(current_app, measurement).resolve()} if measurement else set()
         _copy_runtime(current_app, app, excluded=excluded)
+        from .project_identity import write_icon
+        write_icon(app)
         from .local_migration import preserve_analysis_settings
         preserve_analysis_settings(current_app, app)
         if _sha256(app / base.name) != base_hash:

@@ -194,7 +194,8 @@ def install():
         organize_window(self, self.script_panel)
         from .measurement_ui import MeasurementRateController
         self.measurement_rate_controller = MeasurementRateController(self)
-        self.setWindowTitle(self.windowTitle() + " · Messskripte")
+        from .branding import apply as apply_branding
+        apply_branding(self)
 
     def start_window(self, *args, **kwargs):
         free = getattr(self, 'free_analysis_controller', None)

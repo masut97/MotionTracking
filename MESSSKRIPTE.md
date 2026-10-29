@@ -1,4 +1,4 @@
-# Messskripte im Atracsys Live Tracker
+# Messskripte in Motion Tracking
 
 Die erweiterte Anwendung heißt `AtracsysLiveTracker_Messskripte.exe`. Die bisherige
 `AtracsysLiveTracker.exe` bleibt unverändert und kann weiterhin verwendet werden.

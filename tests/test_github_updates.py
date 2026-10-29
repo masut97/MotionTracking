@@ -33,6 +33,13 @@ def test_release_identity_is_full_commit_and_fixed_asset(monkeypatch):
     assert result["asset"]["id"] == 12
 
 
+def test_older_release_asset_remains_downloadable_after_project_rename(monkeypatch):
+    response = release()
+    response['assets'][0]['name'] = github.LEGACY_ASSET
+    monkeypatch.setattr(github, '_api', lambda *args: response)
+    assert github.latest_release()['asset']['name'] == github.LEGACY_ASSET
+
+
 @pytest.mark.parametrize("identifier", [True, -1, 0, "12"])
 def test_invalid_asset_identifier_is_rejected(monkeypatch, identifier):
     response = release()

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Destination,
     [switch]$Headless,
     [switch]$SkipShortcuts,
@@ -12,7 +12,7 @@ if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
-if (-not $Destination) { $Destination = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'AtracsysTracking' }
+if (-not $Destination) { $Destination = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'MotionTracking' }
 
 function Write-JsonUtf8([string]$Path, $Value) {
     [IO.File]::WriteAllText($Path, ($Value | ConvertTo-Json -Depth 12), (New-Object Text.UTF8Encoding($false)))
@@ -78,19 +78,19 @@ function Install-Tracker([string]$TargetRoot) {
     }
     if (-not $SkipShortcuts) {
         $shell = New-Object -ComObject WScript.Shell
-        $shortcutFolders = @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environment]::GetFolderPath('Programs')) 'Atracsys Messskripte'))
+        $shortcutFolders = @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environment]::GetFolderPath('Programs')) 'Motion Tracking'))
         foreach ($folder in $shortcutFolders) {
             New-Item -ItemType Directory -Force -Path $folder | Out-Null
-            $shortcutPath = Join-Path $folder 'Atracsys Tracking.lnk'
-            $temporaryShortcut = Join-Path $folder ('AtracsysTracking-install-' + [Guid]::NewGuid().ToString() + '.lnk')
+            $shortcutPath = Join-Path $folder 'Motion Tracking.lnk'
+            $temporaryShortcut = Join-Path $folder ('MotionTracking-install-' + [Guid]::NewGuid().ToString() + '.lnk')
             $shortcut = $shell.CreateShortcut($temporaryShortcut)
             $shortcut.TargetPath = Join-Path $targetApp 'AtracsysLiveTracker_Messskripte.exe'
             $shortcut.Arguments = '--mode hardware'
             $shortcut.WorkingDirectory = $targetApp
-            $shortcut.IconLocation = (Join-Path $targetApp 'assets\app_icon.ico') + ',0'
+            $shortcut.IconLocation = (Join-Path $targetApp 'assets\motion_tracking.ico') + ',0'
             $shortcut.Save()
             if (Test-Path -LiteralPath $shortcutPath) {
-                $backupShortcut = Join-Path $folder ('Atracsys Tracking - Vorherige Version ' + [Guid]::NewGuid().ToString() + '.lnk')
+                $backupShortcut = Join-Path $folder ('Motion Tracking - Vorherige Version ' + [Guid]::NewGuid().ToString() + '.lnk')
                 [IO.File]::Replace($temporaryShortcut, $shortcutPath, $backupShortcut)
             } else {
                 [IO.File]::Move($temporaryShortcut, $shortcutPath)
@@ -108,14 +108,14 @@ if ($Headless) {
 }
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Atracsys Live Tracker - Offline-Installation'
+$form.Text = 'Motion Tracking - Offline-Installation'
 $form.ClientSize = New-Object Drawing.Size(660, 350)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 $form.Font = New-Object Drawing.Font('Segoe UI', 10)
 $heading = New-Object System.Windows.Forms.Label
-$heading.Text = 'Atracsys Messskripte - eigenstaendiges Paket'
+$heading.Text = 'Motion Tracking - eigenstaendiges Paket'
 $heading.Font = New-Object Drawing.Font('Segoe UI', 15, [Drawing.FontStyle]::Bold)
 $heading.SetBounds(22, 18, 615, 36)
 $form.Controls.Add($heading)
@@ -137,7 +137,7 @@ $browse.SetBounds(545, 165, 95, 31)
 $browse.Add_Click({
     $picker = New-Object System.Windows.Forms.FolderBrowserDialog
     $picker.Description = 'Installationsordner waehlen'
-    if ($picker.ShowDialog() -eq 'OK') { $pathBox.Text = Join-Path $picker.SelectedPath 'AtracsysLiveTracker' }
+    if ($picker.ShowDialog() -eq 'OK') { $pathBox.Text = Join-Path $picker.SelectedPath 'MotionTracking' }
     $picker.Dispose()
 })
 $form.Controls.Add($browse)
@@ -159,7 +159,7 @@ $installButton.Add_Click({
         $statusLabel.Text = 'Programmdateien werden geprueft und kopiert ...'
         $form.Refresh()
         $result = Install-Tracker $pathBox.Text
-        [void][System.Windows.Forms.MessageBox]::Show("Installation abgeschlossen.`r`n`r`nStart ueber die neue Desktopverknuepfung:`r`nAtracsys Tracking", 'Atracsys Live Tracker')
+        [void][System.Windows.Forms.MessageBox]::Show("Installation abgeschlossen.`r`n`r`nStart ueber die neue Desktopverknuepfung:`r`nMotion Tracking", 'Motion Tracking')
         $form.Close()
     } catch {
         $statusLabel.Text = 'Installation konnte nicht abgeschlossen werden.'

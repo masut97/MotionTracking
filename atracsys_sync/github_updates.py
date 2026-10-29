@@ -9,8 +9,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-REPOSITORY = "masut97/AtracsysTracking"
-ASSET = "AtracsysTracking-update.zip"
+REPOSITORY = "masut97/MotionTracking"
+ASSET = "MotionTracking-update.zip"
+LEGACY_ASSET = "AtracsysTracking-update.zip"
 FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -30,7 +31,7 @@ class SecureRedirect(urllib.request.HTTPRedirectHandler):
 
 def _open(url, accept):
     _validate_url(url)
-    request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "AtracsysTracking-updater"})
+    request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "MotionTracking-updater"})
     # Never look up credentials, launch a login command or send Authorization.
     opener = urllib.request.build_opener(SecureRedirect())
     try:
@@ -57,11 +58,11 @@ def latest_release(app=None, env=None):
         if item.get("name") in assets:
             raise ValueError("Mehrdeutige Dateien im GitHub-Update.")
         assets[item.get("name")] = item
-    asset = assets.get(ASSET)
+    asset = assets.get(ASSET) or assets.get(LEGACY_ASSET)
     if (not asset or type(asset.get("id")) is not int or asset["id"] <= 0
             or type(asset.get("size")) is not int or not 0 < asset["size"] <= 64 * 1024 * 1024):
         raise ValueError("Geprüftes Update-Paket fehlt oder ist zu groß.")
-    return {"revision": tag[7:], "asset": asset, "checksum": assets.get(ASSET + ".sha256")}
+    return {"revision": tag[7:], "asset": asset, "checksum": assets.get(asset['name'] + ".sha256")}
 
 
 def _download_asset(app, asset, destination, env=None):

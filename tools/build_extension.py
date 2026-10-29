@@ -134,6 +134,8 @@ def build(source, target, config=None):
         from atracsys_sync.local_migration import preserve_analysis_settings
         preserve_analysis_settings(source, stage)
         report = _build_payload(source, stage)
+        from atracsys_sync.project_identity import write_icon
+        write_icon(stage)
         shutil.copytree(ROOT / "analysis_scripts", stage / "analysis_scripts", dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.local.json"))
         # Library implementation is not a selectable analysis entry point.
