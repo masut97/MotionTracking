@@ -45,6 +45,11 @@ def test_destroyed_widget_is_rejected_before_native_access():
     assert owned_event_type(Destroyed(),UnsafeEvent(),Widget(),Widget) is None
 
 
+def test_destroyed_main_window_is_also_rejected_before_event_access():
+    window=Widget();window.deleted=True
+    assert owned_event_type(window,UnsafeEvent(),window,Widget) is None
+
+
 def test_python_window_attribute_does_not_shadow_qwidget_ownership_check():
     window=Widget();panel=Widget(window,True);panel.window=window
     assert owned_event_type(panel,NS(type=lambda:42),window,Widget)==42

@@ -7,7 +7,7 @@ def belongs_to_window(widget, window, widget_type):
     try:
         # Some panels use ``self.window`` for their MainWindow reference.
         # Invoke QWidget's method directly rather than that Python attribute.
-        return widget is window or widget_type.window(widget) is window
+        return widget_type.window(widget) is window
     except RuntimeError:  # Qt has already destroyed this widget.
         return False
 
