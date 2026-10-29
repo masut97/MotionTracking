@@ -458,8 +458,10 @@ int run_bridge(const Arguments& args, SharedMemory& shared, MeasurementMemory& m
                 no_frame_count = 0;
                 const auto counter = frame->imageHeader->counter;
                 auto now = Clock::now();
-                const auto now_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
-                if ((!have_pose_counter || counter != last_pose_counter) && sample_due(now_ns, next_pose, pose_interval)) {
+                // Select by the original device clock, not SDK arrival jitter.
+                // The stored host/device timestamps retain their existing meaning.
+                const auto sample_ns = static_cast<std::uint64_t>(frame->imageHeader->timestampUS) * 1000;
+                if ((!have_pose_counter || counter != last_pose_counter) && sample_due(sample_ns, next_pose, pose_interval)) {
                     const auto* pose = publish_pose(shared, frame);
                     publish_measurement(measurements, frame, *pose);
                 }

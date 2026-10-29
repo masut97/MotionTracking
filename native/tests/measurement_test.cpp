@@ -48,5 +48,13 @@ int main() {
     next = 0;
     if (!sample_due(1000000000,next,period) || !sample_due(2000000000,next,period) ||
          sample_due(2000000000,next,period)) return 7;
+    // Real SDK timestamps are quantised in microseconds. Host arrivals can
+    // fluctuate by milliseconds; that must not remove distinct 335 Hz frames.
+    next = 0; accepted = 0;
+    for (std::uint64_t i=0; i<1005; ++i) {
+        const auto device_ns = (1000000 + (i*1000000+167)/335)*1000;
+        accepted += sample_due(device_ns,next,period);
+    }
+    if (accepted != 1005) return 8;
     std::cout << "Synthetic joint pose/fiducial protocol passed\n";
 }

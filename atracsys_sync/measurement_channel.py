@@ -9,6 +9,24 @@ MAGIC = b'ATRMEAS1'
 SUFFIX = '_measurements_v1'
 
 
+def enqueue_joint_frame(worker, frame, enqueue):
+    """At 335 Hz retain native-selected frames despite host arrival jitter.
+
+    Called under the recorder's existing lock. Only bypass the second host-time
+    frequency gate; the original queue, state and marker filters still apply.
+    The bridge already selects distinct SDK frames using device time. Neither
+    the stored timestamps nor the requested recording frequency are changed.
+    """
+    frequency = getattr(worker, '_sample_frequency_hz', 0)
+    if getattr(frame, 'pixel_format', '') != 'MEASUREMENT_V1' or frequency != 335:
+        return enqueue(worker, frame)
+    worker._sample_frequency_hz = 0
+    try:
+        return enqueue(worker, frame)
+    finally:
+        worker._sample_frequency_hz = frequency
+
+
 class Packed(C.LittleEndianStructure):
     _pack_ = 1
 

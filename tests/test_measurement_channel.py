@@ -8,6 +8,30 @@ from atracsys_sync.measurement_channel import (
 from atracsys_sync.fiducial_export import observation_rows, FiducialSession, ObservedAdapter
 
 
+@pytest.mark.parametrize('frequency,kind,expected', [
+    (335, 'MEASUREMENT_V1', 0), (100, 'MEASUREMENT_V1', 100),
+    (20, 'MEASUREMENT_V1', 20), (335, 'GRAY8', 335), (0, 'MEASUREMENT_V1', 0)])
+def test_maximum_joint_rate_only_bypasses_second_arrival_time_gate(frequency, kind, expected):
+    from atracsys_sync.measurement_channel import enqueue_joint_frame
+    worker = NS(_sample_frequency_hz=frequency)
+    frame = NS(pixel_format=kind, computer_monotonic_s=123.456)
+    def original(recorder, received):
+        assert recorder._sample_frequency_hz == expected
+        assert received is frame and received.computer_monotonic_s == 123.456
+        return False  # Queue rejection must still propagate.
+    assert enqueue_joint_frame(worker, frame, original) is False
+    assert worker._sample_frequency_hz == frequency
+
+
+def test_maximum_joint_rate_restores_request_after_enqueue_exception():
+    from atracsys_sync.measurement_channel import enqueue_joint_frame
+    worker = NS(_sample_frequency_hz=335)
+    def fail(*args): raise OSError('queue failure')
+    with pytest.raises(OSError, match='queue failure'):
+        enqueue_joint_frame(worker, NS(pixel_format='MEASUREMENT_V1'), fail)
+    assert worker._sample_frequency_hz == 335
+
+
 class Memory:
     def __init__(self):
         self.data = bytearray(TOTAL_BYTES)

@@ -127,7 +127,8 @@ def install():
             group = getattr(self, "_script_group", None)
             if frame.computer_monotonic_s < getattr(self, "_started_monotonic", 0):
                 return False
-            accepted = enqueue_original(self, frame)
+            from .measurement_channel import enqueue_joint_frame
+            accepted = enqueue_joint_frame(self, frame, enqueue_original)
             if accepted:
                 self._camera_last_sample = time.monotonic()
             if accepted and group is not None and group.recording:

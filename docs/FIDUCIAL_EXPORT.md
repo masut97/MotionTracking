@@ -13,6 +13,11 @@ and incomplete/truncated SDK samples are reported explicitly.
 Pixel retrieval is requested on a separate preallocated SDK query only for the
 preview cadence, normally 20 Hz. The measurement query does not request pixels.
 Both queries run on ONE SDK connection; a second camera client is never opened.
+Native frequency selection uses the device clock so SDK arrival jitter does
+not discard otherwise regular samples. At the maximum 335 Hz setting the
+recorder retains these selected joint samples without applying a second
+host-arrival-time gate. Lower recording-rate settings keep their existing
+selection policy. Stored host/device timestamps are never adjusted.
 335 Hz is a target/native publication limit, not a guarantee of actual device,
 SDK processing or disk throughput. Original timestamps and missing observations
 remain unchanged. The application displays the measurement publication rate

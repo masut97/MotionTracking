@@ -45,7 +45,7 @@ def run(output):
             for index in range(first,last):
                 slot = Slot(sequence=index+1,frame_counter=index,marker_count=3,fiducial_count=3,
                     device_timestamp_us=1000000+round(index*1e6/335),
-                    computer_monotonic_ns=clock_start+round(index*1e9/335))
+                    computer_monotonic_ns=clock_start+round(index*1e9/335)+(1000000 if index%2 else -1000000))
                 for j, geometry in enumerate((299,302,351)):
                     marker=slot.markers[j]
                     marker.geometry_id=geometry; marker.tracking_id=index*10+j
@@ -84,6 +84,8 @@ def run(output):
     with fid_path.open(encoding='utf-8-sig') as stream:
         fids=list(csv.DictReader(stream))
     manifest=json.loads(fid_path.with_suffix('.json').read_text())
+    metadata=json.loads(pose_path.with_suffix('.json').read_text())
+    assert metadata['frequency_skipped_frames'] == 0
     assert len(poses)==len(fids)==produced*3
     assert manifest['complete'] and manifest['frames']==produced and manifest['sdk_correspondence_exported']
     pose_keys={(int(r['frame_counter']),int(r['geometry_id'])):r for r in poses}
@@ -98,4 +100,5 @@ def run(output):
         assert row['device_timestamp_us']==pose_keys[key]['device_timestamp_us']
     return dict(passed=True,hardware_used=False,synthetic_frames=produced,
         simulated_measurement_hz=335,display_batch_hz=20,matched_pose_fiducial_rows=len(fids),
-        wall_seconds=elapsed,ring_losses=reader.dropped)
+        wall_seconds=elapsed,ring_losses=reader.dropped,host_arrival_jitter_ms=1,
+        frequency_skipped_frames=metadata['frequency_skipped_frames'])
