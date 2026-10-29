@@ -80,7 +80,7 @@ def run(output: Path):
             self.script_panel.table.item(row, 0).setCheckState(Qt.CheckState.Checked if spec.simulated else Qt.CheckState.Unchecked)
         assert self.workspace_tabs.count() == 4
         tab_names = tuple(self.workspace_tabs.tabText(i).split(" (")[0] for i in range(4))
-        assert tab_names == ("Live", "MessgerÃ¤te", "Auswertung", "Einstellungen"), tab_names
+        assert tab_names == ("Live", "Messgeräte", "Auswertung", "Einstellungen"), tab_names
         assert self.findChild(QPushButton, 'stopRecordingButton') is not None
         assert self.record_frequency_spin.lineEdit().isReadOnly() is False
         self.record_frequency_spin.lineEdit().setText('20')
@@ -151,8 +151,8 @@ def run(output: Path):
         instances.reference.setCurrentIndex(instances.reference.findData(299))
         assert instances.value()['comparisons'][0]['target'] == '301:21'
         # Exercise the actual buttons, not only programmatically populated rows.
-        add_marker_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Marker hinzufÃ¼gen')
-        add_pair_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Vergleich hinzufÃ¼gen')
+        add_marker_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Marker hinzufügen')
+        add_pair_button = next(b for b in instances.findChildren(QPushButton) if b.text() == 'Vergleich hinzufügen')
         add_marker_button.click()  # all visible markers are already listed
         assert instances.markers.rowCount() == 5
         assert instances.reference.currentData() == 299
