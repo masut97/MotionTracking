@@ -221,6 +221,8 @@ def run(output: Path):
 
         def begin_second():
             first_manifest = output / (recording_name + ".scripts.json")
+            fiducial_manifest = output / (recording_name + '.fiducials.json')
+            assert json.loads(fiducial_manifest.read_text())['complete'], 'Fiducial export not finalized at stop'
             assert (output / (recording_name + ".json")).exists()
             first_bytes = first_manifest.read_bytes()
             assert json.loads(first_bytes)["state"] == "complete"
@@ -374,6 +376,10 @@ def run(output: Path):
         import hashlib
         for suffix in ('', '_second'):
             metadata = json.loads((output/(recording_name+suffix+'.json')).read_text(encoding='utf-8'))
+            fiducial_info = json.loads((output/(recording_name+suffix+'.fiducials.json')).read_text())
+            assert fiducial_info['complete'] and fiducial_info['frames'] > 0, fiducial_info
+            assert fiducial_info['sdk_correspondence_exported'] is False
+            assert metadata['fiducial_export']['source'] == 'received_stereo_image_frames'
             context = metadata['coordinate_context']
             assert 'error' not in context, context
             assert context['geometry_sha256']

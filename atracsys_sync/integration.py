@@ -19,6 +19,7 @@ def install():
     from atracsys_tracker.adapters.base import FrameTimeoutError
     from .camera_health import CameraGuard, GuardedAdapter, StreamHealth
     from .overlay_performance import install as install_fast_outlines
+    from .fiducial_export import ObservedAdapter, FiducialSession, load_geometries
 
     Worker = recording.RecordingWorker
     if getattr(Worker, "_measurement_extension_installed", False):
@@ -45,7 +46,8 @@ def install():
     def guarded_adapter(self, *args, **kwargs):
         if not hasattr(self, "_camera_health"):
             self._camera_health = StreamHealth()
-        return GuardedAdapter(new_adapter(self, *args, **kwargs), self._camera_health, FrameTimeoutError)
+        return ObservedAdapter(GuardedAdapter(new_adapter(self, *args, **kwargs),
+                                             self._camera_health, FrameTimeoutError), self)
 
     def maybe_analyze(self, *args, **kwargs):
         if getattr(self.recorder, "_camera_abort", False):
@@ -62,6 +64,7 @@ def install():
     def start_session(self, *args, **kwargs):
         group = getattr(self, "_script_group", None)
         context = None
+        fiducial_definitions, fiducial_info = {}, {}
         root = getattr(self, '_coordinate_project_root', None)
         if root is not None:
             # Read local files BEFORE establishing either recording clock.
@@ -70,6 +73,7 @@ def install():
             metadata = kwargs.get('metadata', args[2] if len(args) > 2 else {})
             names = metadata.get('geometry_files', ()) if isinstance(metadata, dict) else ()
             context = snapshot(root, names)
+            fiducial_definitions, fiducial_info = load_geometries(root, names)
         try:
             # Hold the existing re-entrant lock until auxiliary writers are initialized.
             # The acquisition and write hooks acquire it before consuming a frame.
@@ -83,6 +87,16 @@ def install():
                 self._overflow_interval_open = False
                 self._sync_ticks = {}
                 result = start_original(self, *args, **kwargs)
+                self._fiducial_session = FiducialSession(
+                    self._csv_path, self._session_id, self._started_monotonic,
+                    fiducial_definitions, fiducial_info)
+                self._metadata['fiducial_export'] = {
+                    'csv': str(self._fiducial_session.path),
+                    'manifest': str(self._fiducial_session.manifest),
+                    'source': 'received_stereo_image_frames',
+                    'sampling': 'Independent image rate, not high-rate pose samples',
+                    'coordinates': 'Measured camera coordinates in mm; no synthesized positions',
+                    'point_numbering': 'Unique geometric matching, not original SDK correspondences'}
                 if group is not None:
                     self._script_started_counter = time.perf_counter()
                     group.begin_recording(self._csv_path, self._session_id, self._script_started_counter)
@@ -95,6 +109,11 @@ def install():
         except Exception:
             if self.stats().state != "Gestoppt":
                 stop_original(self)
+            fiducials = getattr(self, '_fiducial_session', None)
+            self._fiducial_session = None
+            if fiducials is not None:
+                fiducials.info['error'] = fiducials.info['error'] or 'Recording preparation did not complete.'
+                fiducials.close()
             if group is not None:
                 group.stop()
             raise
@@ -130,7 +149,18 @@ def install():
         return write_original(self, Writer(), frame)
 
     def stop(self, *args, **kwargs):
-        result = stop_original(self, *args, **kwargs)
+        fiducials = getattr(self, '_fiducial_session', None)
+        self._fiducial_session = None
+        try:
+            result = stop_original(self, *args, **kwargs)
+        finally:
+            if fiducials is not None:
+                try:
+                    report = fiducials.close()
+                    if not report['complete']:
+                        self._last_error = 'Fiducial-Export unvollständig; siehe .fiducials.json.'
+                except OSError as error:
+                    self._last_error = f'Fiducial-Export konnte nicht finalisiert werden: {error}'
         group = getattr(self, "_script_group", None)
         if group is not None:
             group.stop(tracker_stats=result)
@@ -139,11 +169,12 @@ def install():
                 self._last_error = "Messskript-Aufnahme unvollständig. Details in der .scripts.json-Datei."
             self._script_group = None
             return self.stats()
-        return result
+        return self.stats() if fiducials is not None else result
 
     def init_window(self, *args, **kwargs):
         window_init(self, *args, **kwargs)
         self.recorder._camera_source = self.acquisition
+        self.acquisition._fiducial_recorder = self.recorder
         self.recorder._coordinate_project_root = self.project_root
         self.camera_guard = CameraGuard(self)
         self.script_panel = ScriptPanel(self, window_start)
