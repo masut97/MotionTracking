@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from atracsys_sync.marker_selection import selection_choices, csv_marker_choices
+from atracsys_sync.marker_selection import selection_choices, csv_marker_choices, MarkerChoices
 
 
 def test_single_geometry_choices_survive_volatile_ids_but_duplicates_do_not_collapse():
@@ -17,6 +17,14 @@ def test_single_geometry_choices_survive_volatile_ids_but_duplicates_do_not_coll
     choices = selection_choices(later, preferred=True)
     assert '351' not in choices
     assert {'351:200003','351:200004'} <= set(choices)
+
+
+def test_hiding_an_instance_does_not_make_recorded_geometry_unambiguous():
+    visible = MarkerChoices()
+    visible['351:100'] = 'Selected instance'
+    visible.instance_counts['351'] = 2
+    assert set(selection_choices(visible, preferred=True)) == {'351:100'}
+    assert '351' not in selection_choices(visible)
 
 
 def recording(path, free, duplicated=False):

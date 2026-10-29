@@ -1,6 +1,13 @@
 """Visible live identities for free analysis; no inferred instance ordering."""
 
 
+class MarkerChoices(dict):
+    """Selectable identities plus counts of all observed, including hidden, ones."""
+    def __init__(self):
+        super().__init__()
+        self.instance_counts = {}
+
+
 def selection_choices(visible, preferred=False):
     """Offer geometry-only binding only when exactly one live instance exists.
 
@@ -13,7 +20,8 @@ def selection_choices(visible, preferred=False):
         groups.setdefault(str(key).split(':')[0], []).append((str(key), label))
     choices = {} if preferred else dict(visible)
     for geometry, instances in groups.items():
-        if len(instances) == 1:
+        count = getattr(visible, 'instance_counts', {}).get(geometry, len(instances))
+        if len(instances) == 1 and count == 1:
             choices[geometry] = f'Marker {geometry} · eindeutig je Bild · Tracking-ID darf wechseln'
         elif preferred:
             choices.update(instances)
@@ -64,11 +72,14 @@ def visible_marker_choices(window):
     states = states.values() if isinstance(states, dict) else states
     dismissed = getattr(window, '_dismissed_geometry_ids', set())
     dismissed_instances = getattr(window, '_dismissed_markers', set())
-    result = {}
+    result = MarkerChoices()
     for state in states:
         pose = state.pose
-        if (not state.visible or state.age_ms() > 500 or not pose.valid
-                or pose.geometry_id in dismissed
+        if not state.visible or state.age_ms() > 500 or not pose.valid:
+            continue
+        geometry = str(pose.geometry_id)
+        result.instance_counts[geometry] = result.instance_counts.get(geometry, 0) + 1
+        if (pose.geometry_id in dismissed
                 or getattr(state, 'identity_key', (pose.geometry_id, state.identity_id)) in dismissed_instances):
             continue
         key = f'{pose.geometry_id}:{pose.tracking_id}'
